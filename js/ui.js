@@ -33,10 +33,13 @@ function syncPanelHeight() {
   }
 }
 
-export function renderHeader(theme, radiusM) {
+export function renderHeader(theme, radiusM, onSwitchTheme) {
   document.title = theme.appTitle;
   $('app-title').textContent = theme.appTitle;
   $('form-title').textContent = theme.formTitle(radiusM);
+  const sw = $('theme-switch');
+  sw.textContent = theme.messages.switchTo;
+  sw.onclick = onSwitchTheme;
 }
 
 let loadingTimer = null;
@@ -62,7 +65,10 @@ export function renderSummary(theme, state) {
   } else {
     const total = state.counts.S + state.counts.P + state.counts.D;
     const anyError = Object.values(state.errors).some(Boolean);
-    status.textContent = total === 0 && !anyError ? theme.messages.empty : theme.messages.final;
+    // The closing stamp already says the survey is complete; the status line only speaks when
+    // there is something else to say.
+    if (total === 0 && !anyError) status.textContent = theme.messages.empty;
+    else status.hidden = true;
   }
 
   box.append(rowsList(theme.summaryRows(state.counts, state.rating)));
@@ -132,6 +138,14 @@ export function showResurvey(theme, onPress) {
   btn.textContent = theme.messages.resurvey;
   btn.onclick = () => { hideResurvey(); onPress(); };
   btn.hidden = false;
+}
+
+export function refreshResurvey(theme) {
+  $('resurvey').textContent = theme.messages.resurvey;
+}
+
+export function isSheetOpen() {
+  return !$('sheet').hidden;
 }
 
 export function hideResurvey() {

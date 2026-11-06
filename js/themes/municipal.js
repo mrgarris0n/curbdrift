@@ -127,5 +127,6 @@ export const municipal = {
     routeEmpty: 'No itinerary can be issued. Insufficient deterioration within walking distance.',
     close: 'CLOSE FILE',
     summaryTitle: 'SURVEY SUMMARY',
+    switchTo: 'FIELD GUIDE',
   },
 };

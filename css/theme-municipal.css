@@ -106,3 +106,4 @@
 [data-theme="municipal"] .route-button { border-width: 2px; }
 [data-theme="municipal"] .rule { border-top: 1px solid var(--rule); }
 [data-theme="municipal"] .marker.off-route { opacity: 0.22; }
+[data-theme="municipal"] .theme-switch { background: transparent; color: var(--bar-ink); border: 1px solid rgba(255, 255, 255, 0.6); font-family: var(--font); letter-spacing: 0.04em; }

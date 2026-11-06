@@ -8,15 +8,19 @@
   <meta name="description" content="A municipal survey of nearby deterioration: long-standing scaffolding, probable puddles and sidewalk defects in New York City.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw==" crossorigin="anonymous" referrerpolicy="no-referrer">
   <link rel="stylesheet" href="css/app.css">
   <link rel="stylesheet" href="css/theme-municipal.css">
+  <link rel="stylesheet" href="css/theme-field.css">
 </head>
 <body>
   <header class="app-header">
-    <div class="app-title" id="app-title"></div>
-    <div class="form-title" id="form-title"></div>
+    <div class="titles">
+      <div class="app-title" id="app-title"></div>
+      <div class="form-title" id="form-title"></div>
+    </div>
+    <button id="theme-switch" class="theme-switch" type="button"></button>
   </header>
   <main class="stage">
     <div id="map" class="map" role="application" aria-label="Survey map"></div>

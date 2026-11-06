@@ -5,12 +5,22 @@ import { fetchSheds } from './sources/sheds.js';
 import { fetchComplaints } from './sources/complaints.js';
 import { fetchWeather, summarizeWeather } from './sources/weather.js';
 import { scoreShed, scorePuddle, scoreDefect, areaRating } from './scoring.js';
-import { municipal } from './themes/municipal.js';
+import { THEMES, pickTheme } from './themes/index.js';
 import { createMap } from './map.js';
-import { renderHeader, renderSummary, openSheet, openRoute, closeSheet, showNotice, showResurvey, hideResurvey } from './ui.js';
+import { renderHeader, renderSummary, openSheet, openRoute, closeSheet, isSheetOpen, showNotice, showResurvey, hideResurvey, refreshResurvey } from './ui.js';
 import { planRoute } from './route.js';
 
-const theme = municipal;
+const THEME_KEY = 'curbdrift.theme';
+
+// The theme choice is a per-browser convenience; storage may be unavailable, so never rely on it.
+function loadThemeId() {
+  try { return globalThis.localStorage?.getItem(THEME_KEY) ?? null; } catch { return null; }
+}
+function saveThemeId(id) {
+  try { globalThis.localStorage?.setItem(THEME_KEY, id); } catch { /* not remembered; fine */ }
+}
+
+let theme = pickTheme(typeof document !== 'undefined' ? loadThemeId() : null);
 const GEO_TIMEOUT_MS = 8000;
 
 /** Give each item a code ("S-1", "P-2"…), numbered within its kind by descending score. */
@@ -84,8 +94,29 @@ export async function gatherSurvey(at, today, sources = { fetchSheds, fetchCompl
 }
 
 async function main() {
-  renderHeader(theme, RADIUS_M);
-  renderSummary(theme, { counts: { S: 0, P: 0, D: 0 }, rating: 0, pending: true, errors: {} });
+  // What is on screen, kept so a theme switch can re-render it in the new voice.
+  let rerender = () => renderSummary(theme, { counts: { S: 0, P: 0, D: 0 }, rating: 0, pending: true, errors: {} });
+  let reopenSheet = null;
+  let user = null;
+
+  function applyTheme() {
+    document.documentElement.dataset.theme = theme.id;
+    renderHeader(theme, RADIUS_M, switchTheme);
+  }
+
+  function switchTheme() {
+    const sheetWasOpen = isSheetOpen();
+    theme = Object.values(THEMES).find((t) => t.id !== theme.id);
+    saveThemeId(theme.id);
+    applyTheme();
+    if (user) placeUser(user.center, user.verified);
+    refreshResurvey(theme);
+    rerender();
+    if (sheetWasOpen && reopenSheet) reopenSheet();
+  }
+
+  applyTheme();
+  rerender();
 
   let surveyId = 0;
   const panelHeight = () => document.getElementById('summary').offsetHeight;
@@ -110,27 +141,36 @@ async function main() {
 
     const render = ({ sheds = [], puddles = [], defects = [], errors = {} }, pending) => {
       const items = assignCodes([...sheds, ...puddles, ...defects], theme);
-      map.setItems(items, (item) => openSheet(theme, item, () => map.select(null)));
+      map.setItems(items, (item) => {
+        reopenSheet = () => openSheet(theme, item, () => map.select(null));
+        reopenSheet();
+      });
       const counts = { S: sheds.length, P: puddles.length, D: defects.length };
       // The itinerary loops from the survey center through the items of this survey.
       const onRoute = () => {
         const route = planRoute(at, items);
-        openRoute(theme, route, () => map.setRoute(null));
+        reopenSheet = () => openRoute(theme, route, () => map.setRoute(null));
+        reopenSheet();
         // After the sheet is open, so the view fits the loop above it.
         map.setRoute(route.stops.length ? [at, ...route.stops, at] : null, document.getElementById('sheet').offsetHeight);
       };
       renderSummary(theme, { counts, rating: areaRating(items), pending, errors, onRoute });
     };
-    render({}, true);
+    const show = (result, pending) => {
+      rerender = () => render(result, pending);
+      rerender();
+    };
+    show({}, true);
 
-    gatherSurvey(at, today, undefined, (sheds) => { if (current()) render({ sheds }, true); })
-      .then((result) => { if (current()) render(result, false); });
+    gatherSurvey(at, today, undefined, (sheds) => { if (current()) show({ sheds }, true); })
+      .then((result) => { if (current()) show(result, false); });
   }
 
-  const placeUser = (center, verified) => {
+  function placeUser(center, verified) {
+    user = { center, verified };
     map.setUser(center, theme.userLabel(verified));
     showNotice(verified ? '' : theme.messages.defaultLocation);
-  };
+  }
 
   const position = await locate(navigator.geolocation, GEO_TIMEOUT_MS, (late) => {
     // Permission or the fix came after we gave up: move the survey to the real position.

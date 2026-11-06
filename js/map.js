@@ -41,6 +41,7 @@ export function createMap(el, center, { onMapTap, onUserMove }) {
   let userMarker = null;
   let area = null;
   let routeLine = null;
+  let routeIds = null; // ids of items on the drawn route, or null
   let selectedId = null;
 
   function select(id) {
@@ -80,6 +81,7 @@ export function createMap(el, center, { onMapTap, onUserMove }) {
         m.addTo(items);
         markersById.set(item.id, m);
       }
+      if (routeIds) for (const [id, m] of markersById) m.getElement()?.classList.toggle('off-route', !routeIds.has(id));
       if (selectedId && !markersById.has(selectedId)) selectedId = null;
       else if (selectedId) select(selectedId);
     },
@@ -93,8 +95,8 @@ export function createMap(el, center, { onMapTap, onUserMove }) {
     setRoute(points, coveredBottomPx = 0) {
       routeLine?.remove();
       routeLine = null;
-      const onRoute = new Set((points ?? []).map((pt) => pt.id).filter(Boolean));
-      for (const [id, m] of markersById) m.getElement()?.classList.toggle('off-route', Boolean(points) && !onRoute.has(id));
+      routeIds = points ? new Set(points.map((pt) => pt.id).filter(Boolean)) : null;
+      for (const [id, m] of markersById) m.getElement()?.classList.toggle('off-route', Boolean(routeIds) && !routeIds.has(id));
       if (!points) return;
       routeLine = L.polyline(points.map((pt) => [pt.lat, pt.lon]), { className: 'route-line', weight: 3, dashArray: '6 6', interactive: false }).addTo(map);
       fitting = true;
