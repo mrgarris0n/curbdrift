@@ -1,0 +1,95 @@
+/* Theme A — "Municipal paperwork". Colors, type and the form/stamp/marker look. */
+[data-theme="municipal"] {
+  --paper: #ecebe4;
+  --paper-2: #fbfaf5;
+  --ink: #222;
+  --ink-soft: #5b5a55;
+  --rule: #9a988f;
+  --bar: #2b3a55;
+  --bar-ink: #fff;
+  --stamp: #b22;
+  --water: #3a6ea5;
+  --defect: #8a5a00;
+  --font: "IBM Plex Mono", "Courier New", ui-monospace, monospace;
+}
+
+[data-theme="municipal"] body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+}
+
+[data-theme="municipal"] .app-header {
+  background: var(--bar);
+  color: var(--bar-ink);
+  letter-spacing: 0.04em;
+}
+[data-theme="municipal"] .app-header .app-title { font-weight: 700; }
+[data-theme="municipal"] .app-header .form-title { font-size: 0.68rem; opacity: 0.9; }
+
+/* Greyscale base map: it is a survey sheet, not a travel brochure. */
+[data-theme="municipal"] .leaflet-tile-pane { filter: grayscale(1) contrast(0.95) brightness(1.02); }
+[data-theme="municipal"] .leaflet-container { background: var(--paper); font-family: var(--font); }
+
+[data-theme="municipal"] .panel {
+  background: var(--paper-2);
+  border-top: 2px solid var(--bar);
+}
+[data-theme="municipal"] .panel h2 { font-size: 0.8rem; letter-spacing: 0.06em; }
+
+/* Dotted-leader record rows: "Label ........ VALUE" */
+[data-theme="municipal"] .row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+  font-size: 0.78rem;
+  padding: 0.18rem 0;
+}
+[data-theme="municipal"] .row .label { flex: 0 1 auto; color: var(--ink-soft); }
+[data-theme="municipal"] .row .leader { flex: 1 1 1rem; border-bottom: 1px dotted var(--rule); min-width: 1rem; transform: translateY(-0.25em); }
+[data-theme="municipal"] .row .value { flex: 0 1 auto; text-align: right; font-weight: 700; overflow-wrap: anywhere; max-width: 60%; }
+
+[data-theme="municipal"] .stamp {
+  display: inline-block;
+  border: 2px solid var(--stamp);
+  color: var(--stamp);
+  padding: 0.15rem 0.5rem;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  transform: rotate(-4deg);
+  margin-top: 0.6rem;
+  opacity: 0.88;
+}
+[data-theme="municipal"] .stamp.provisional { border-style: dashed; }
+
+[data-theme="municipal"] .notice {
+  background: var(--paper-2);
+  border: 1px solid var(--stamp);
+  color: var(--stamp);
+}
+
+[data-theme="municipal"] .button {
+  font-family: var(--font);
+  background: transparent;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+}
+
+/* Markers. S = square, P = circle, D = triangle; code label beside each. */
+[data-theme="municipal"] .marker { position: relative; }
+[data-theme="municipal"] .marker .shape { position: absolute; left: 0; top: 0; width: 18px; height: 18px; box-sizing: border-box; }
+[data-theme="municipal"] .marker-S .shape { border: 2px solid var(--bar); background: rgba(255, 255, 255, 0.75); }
+[data-theme="municipal"] .marker-P .shape { border: 2px solid var(--water); border-radius: 50%; background: rgba(58, 110, 165, 0.15); }
+[data-theme="municipal"] .marker-D .shape {
+  width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent;
+  border-bottom: 16px solid var(--defect); top: 1px;
+}
+[data-theme="municipal"] .marker .code {
+  position: absolute; left: 21px; top: 2px; white-space: nowrap;
+  font: 700 10px/1 var(--font); color: var(--ink);
+  background: rgba(251, 250, 245, 0.85); padding: 1px 2px;
+}
+[data-theme="municipal"] .marker.selected .shape { outline: 2px solid var(--stamp); outline-offset: 2px; }
+[data-theme="municipal"] .marker-user .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--stamp); border: 2px solid #fff; box-sizing: border-box; }
+[data-theme="municipal"] .marker-user .code { color: var(--stamp); left: 16px; top: 1px; }
