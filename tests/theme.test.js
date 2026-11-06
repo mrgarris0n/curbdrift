@@ -97,3 +97,47 @@ test('no emoji anywhere', () => {
   strings.push(...collectStrings(theme.summaryRows({ S: 1, P: 1, D: 1 }, 50)));
   for (const s of strings) assert.doesNotMatch(s, /\p{Extended_Pictographic}/u, s);
 });
+
+const route = {
+  stops: [
+    { ...shed, legM: 130, atM: 130 },
+    { ...puddle, legM: 260.4, atM: 390.4 },
+  ],
+  distanceM: 650.4,
+  minutes: 8,
+  totalScore: 172.5,
+};
+
+test('itinerary copy', () => {
+  assert.equal(theme.routeTitle, 'ITINERARY CD-2: DESIGNATED DETERIORATION WALK');
+  assert.equal(theme.messages.routeButton, 'ISSUE WALKING ITINERARY');
+  assert.equal(theme.messages.cancelRoute, 'CANCEL ITINERARY');
+  assert.equal(theme.routeStamp, 'APPROVED FOR PEDESTRIAN INSPECTION.');
+  assert.match(theme.messages.routeEmpty, /no itinerary/i);
+});
+
+test('itinerary summary rows state distance, time, and the estimation method', () => {
+  const rows = theme.routeSummaryRows(route);
+  assert.ok(rows.some((r) => r.value === '650 m'));
+  assert.ok(rows.some((r) => r.value === '8 min'));
+  assert.ok(rows.some((r) => r.value === '2'));
+  assert.ok(rows.some((r) => r.value === '172.5'));
+  assert.ok(rows.some((r) => /1\.3/.test(r.value)), 'method row explains the street allowance');
+});
+
+test('itinerary stop rows list each stop in order with cumulative distance, then the return', () => {
+  const rows = theme.routeStopRows(route);
+  assert.equal(rows.length, 3);
+  assert.match(rows[0].label, /^1\. S-1 /);
+  assert.equal(rows[0].value, '130 m');
+  assert.match(rows[1].label, /^2\. P-1 /);
+  assert.equal(rows[1].value, '390 m');
+  assert.match(rows[2].label, /return/i);
+  assert.equal(rows[2].value, '650 m');
+});
+
+test('itinerary copy has no emoji', () => {
+  const strings = [theme.routeTitle, theme.routeStamp, theme.messages.routeButton, theme.messages.cancelRoute, theme.messages.routeEmpty,
+    ...theme.routeSummaryRows(route).flatMap((r) => [r.label, r.value]), ...theme.routeStopRows(route).flatMap((r) => [r.label, r.value])];
+  for (const s of strings) assert.doesNotMatch(s, /\p{Extended_Pictographic}/u, s);
+});

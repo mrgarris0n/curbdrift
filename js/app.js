@@ -7,7 +7,8 @@ import { fetchWeather, summarizeWeather } from './sources/weather.js';
 import { scoreShed, scorePuddle, scoreDefect, areaRating } from './scoring.js';
 import { municipal } from './themes/municipal.js';
 import { createMap } from './map.js';
-import { renderHeader, renderSummary, openSheet, closeSheet, showNotice, showResurvey, hideResurvey } from './ui.js';
+import { renderHeader, renderSummary, openSheet, openRoute, closeSheet, showNotice, showResurvey, hideResurvey } from './ui.js';
+import { planRoute } from './route.js';
 
 const theme = municipal;
 const GEO_TIMEOUT_MS = 8000;
@@ -103,6 +104,7 @@ async function main() {
 
     closeSheet();
     hideResurvey();
+    map.setRoute(null); // an itinerary belongs to the survey it was issued for
     map.setSurveyArea(at, RADIUS_M);
     if (fit) map.fitTo(at, RADIUS_M, panelHeight());
 
@@ -110,7 +112,13 @@ async function main() {
       const items = assignCodes([...sheds, ...puddles, ...defects], theme);
       map.setItems(items, (item) => openSheet(theme, item, () => map.select(null)));
       const counts = { S: sheds.length, P: puddles.length, D: defects.length };
-      renderSummary(theme, { counts, rating: areaRating(items), pending, errors });
+      // The itinerary loops from the survey center through the items of this survey.
+      const onRoute = () => {
+        const route = planRoute(at, items);
+        map.setRoute(route.stops.length ? [at, ...route.stops, at] : null);
+        openRoute(theme, route, () => map.setRoute(null));
+      };
+      renderSummary(theme, { counts, rating: areaRating(items), pending, errors, onRoute });
     };
     render({}, true);
 

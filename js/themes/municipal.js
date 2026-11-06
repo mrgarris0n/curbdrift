@@ -84,6 +84,26 @@ export const municipal = {
     return item.closed ? 'CLOSED BY CITY. CONDITION UNVERIFIED.' : 'REPORTED. AWAITING RESPONSE.';
   },
 
+  routeTitle: 'ITINERARY CD-2: DESIGNATED DETERIORATION WALK',
+  routeStamp: 'APPROVED FOR PEDESTRIAN INSPECTION.',
+
+  routeSummaryRows(route) {
+    return [
+      { label: 'Stops designated', value: String(route.stops.length) },
+      { label: 'Total distance (estimated)', value: `${Math.round(route.distanceM)} m` },
+      { label: 'Estimated duration', value: `${route.minutes} min` },
+      { label: 'Cumulative deterioration', value: route.totalScore.toFixed(1) },
+      { label: 'Method', value: 'STRAIGHT LINE × 1.3 (STREET GRID ALLOWANCE)' },
+    ];
+  },
+
+  routeStopRows(route) {
+    return [
+      ...route.stops.map((s, i) => ({ label: `${i + 1}. ${s.code} ${municipal.kindName[s.kind]}`, value: `${Math.round(s.atM)} m` })),
+      { label: 'Return to point of origin', value: `${Math.round(route.distanceM)} m` },
+    ];
+  },
+
   summaryRows(counts, rating) {
     return [
       { label: 'Sheds and scaffolds (S)', value: String(counts.S) },
@@ -102,6 +122,9 @@ export const municipal = {
     final: 'SURVEY COMPLETE',
     tapHint: 'Tap an item to open its file. Move the map to request a survey of another area.',
     resurvey: 'SURVEY THIS AREA',
+    routeButton: 'ISSUE WALKING ITINERARY',
+    cancelRoute: 'CANCEL ITINERARY',
+    routeEmpty: 'No itinerary can be issued. Insufficient deterioration within walking distance.',
     close: 'CLOSE FILE',
     summaryTitle: 'SURVEY SUMMARY',
   },

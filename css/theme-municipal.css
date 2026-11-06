@@ -77,7 +77,6 @@
 }
 
 /* Markers. S = square, P = circle, D = triangle; code label beside each. */
-[data-theme="municipal"] .marker { position: relative; }
 [data-theme="municipal"] .marker .shape { position: absolute; left: 7px; top: 7px; width: 18px; height: 18px; box-sizing: border-box; }
 [data-theme="municipal"] .marker-S .shape { border: 2px solid var(--bar); background: rgba(255, 255, 255, 0.75); }
 [data-theme="municipal"] .marker-P .shape { border: 2px solid var(--water); border-radius: 50%; background: rgba(58, 110, 165, 0.15); }
@@ -102,3 +101,7 @@
   letter-spacing: 0.04em;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
+
+[data-theme="municipal"] .route-line { stroke: var(--stamp); }
+[data-theme="municipal"] .route-button { border-width: 2px; }
+[data-theme="municipal"] .rule { border-top: 1px solid var(--rule); }

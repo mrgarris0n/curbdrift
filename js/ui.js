@@ -75,24 +75,43 @@ export function renderSummary(theme, state) {
   }
 
   const stamp = el('span', state.pending ? 'stamp provisional' : 'stamp', state.pending ? theme.messages.provisional : theme.messages.final);
-  box.append(stamp, el('p', 'hint', theme.messages.tapHint));
+  box.append(stamp);
+  if (state.onRoute && !state.pending && state.counts.S + state.counts.P + state.counts.D > 0) {
+    const routeButton = el('button', 'button route-button', theme.messages.routeButton);
+    routeButton.type = 'button';
+    routeButton.addEventListener('click', state.onRoute);
+    box.append(routeButton);
+  }
+  box.append(el('p', 'hint', theme.messages.tapHint));
   syncPanelHeight();
 }
 
-export function openSheet(theme, item, onClose) {
+// Show the bottom sheet (in place of the summary) with a title, one action button and content.
+function showSheet(titleText, buttonText, onButton, ...content) {
   const sheet = $('sheet');
   sheet.replaceChildren();
   const head = el('div', 'sheet-head');
-  const title = el('h2', null, theme.itemTitle(item));
-  const close = el('button', 'button', theme.messages.close);
-  close.type = 'button';
-  close.addEventListener('click', () => { closeSheet(); onClose?.(); });
-  head.append(title, close);
-  sheet.append(head, rowsList(theme.recordRows(item)), el('span', 'stamp', theme.stamp(item)));
+  const button = el('button', 'button', buttonText);
+  button.type = 'button';
+  button.addEventListener('click', () => { closeSheet(); onButton?.(); });
+  head.append(el('h2', null, titleText), button);
+  sheet.append(head, ...content);
   sheet.hidden = false;
   $('summary').hidden = true;
   syncPanelHeight();
-  close.focus({ preventScroll: true });
+  button.focus({ preventScroll: true });
+}
+
+export function openSheet(theme, item, onClose) {
+  showSheet(theme.itemTitle(item), theme.messages.close, onClose, rowsList(theme.recordRows(item)), el('span', 'stamp', theme.stamp(item)));
+}
+
+/** The walking itinerary file. Its button cancels the itinerary. */
+export function openRoute(theme, route, onCancel) {
+  const content = route.stops.length
+    ? [rowsList(theme.routeSummaryRows(route)), el('hr', 'rule'), rowsList(theme.routeStopRows(route)), el('span', 'stamp', theme.routeStamp)]
+    : [el('p', 'status-line', theme.messages.routeEmpty)];
+  showSheet(theme.routeTitle, theme.messages.cancelRoute, onCancel, ...content);
 }
 
 export function closeSheet() {

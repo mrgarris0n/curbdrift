@@ -66,5 +66,8 @@ body {
 }
 .resurvey[hidden] { display: none; }
 
+.route-button { display: block; margin-top: 0.8rem; min-height: 2.6rem; width: 100%; font-weight: 700; }
+.rule { border: 0; margin: 0.5rem 0; }
+
 /* Keep attribution visible above the bottom panel. */
 .leaflet-bottom { bottom: var(--panel-h, 0px); }

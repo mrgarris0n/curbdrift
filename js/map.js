@@ -40,6 +40,7 @@ export function createMap(el, center, { onMapTap, onUserMove }) {
   const markersById = new Map();
   let userMarker = null;
   let area = null;
+  let routeLine = null;
   let selectedId = null;
 
   function select(id) {
@@ -84,6 +85,14 @@ export function createMap(el, center, { onMapTap, onUserMove }) {
     },
 
     select,
+
+    /** Draw the itinerary loop through the given points, or clear it with null. */
+    setRoute(points) {
+      routeLine?.remove();
+      routeLine = points
+        ? L.polyline(points.map((pt) => [pt.lat, pt.lon]), { className: 'route-line', weight: 3, dashArray: '6 6', interactive: false }).addTo(map)
+        : null;
+    },
 
     /** Fit the survey circle into the part of the map not covered by the bottom panel. */
     fitTo(c, radiusM, coveredBottomPx = 0) {
