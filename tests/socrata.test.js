@@ -86,3 +86,15 @@ test('the browser never sends an app token (the proxy adds it)', async () => {
   await socrataQuery('abcd-1234', {}, { fetchImpl: f.impl, storage: null });
   assert.equal(f.calls[0].init.headers?.['X-App-Token'], undefined);
 });
+
+test('a cancelled survey cancels its request', async () => {
+  const outer = new AbortController();
+  const impl = (url, init) => new Promise((_, reject) => {
+    init.signal?.addEventListener('abort', () => reject(init.signal.reason));
+  });
+  const pending = socrataQuery('abcd-1234', {}, { fetchImpl: impl, storage: null, timeoutMs: 10000, signal: outer.signal });
+  outer.abort();
+  // Promptly — not when the 10 s timeout eventually fires.
+  const tooSlow = new Promise((_, reject) => setTimeout(() => reject(new Error('not cancelled')), 500));
+  await assert.rejects(Promise.race([pending, tooSlow]), RecordsUnavailableError);
+});

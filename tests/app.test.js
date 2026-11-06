@@ -92,3 +92,16 @@ test('gatherSurvey: source rejections mark only their layers', async () => {
   assert.deepEqual(result.errors, { S: true });
   assert.equal(result.puddles.length, 1);
 });
+
+test('gatherSurvey hands its cancellation signal to every source', async () => {
+  const { gatherSurvey } = await import('../js/app.js');
+  const signal = new AbortController().signal;
+  const seen = [];
+  const spy = (value) => async (at, a, b) => { seen.push((b ?? a)?.signal === signal); return value; };
+  await gatherSurvey({ lat: 0, lon: 0 }, new Date(), {
+    fetchSheds: spy([]),
+    fetchComplaints: spy({ puddles: [], defects: [] }),
+    fetchWeather: spy({ time: [], precipitation: [], shortwave_radiation: [], temperature_2m: [] }),
+  }, undefined, signal);
+  assert.deepEqual(seen, [true, true, true]);
+});

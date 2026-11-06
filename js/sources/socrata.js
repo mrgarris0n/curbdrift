@@ -1,4 +1,5 @@
 import { CACHE_TTL_MS } from '../config.js';
+import { requestSignal } from '../net.js';
 
 // Our own proxy (api/socrata.js) forwards to NYC Open Data and adds the app token server-side.
 const PROXY = '/api/socrata';
@@ -42,7 +43,7 @@ function writeCache(storage, key, now, rows) {
 }
 
 /** Query a NYC Open Data (Socrata) dataset. Resolves to the row array. */
-export async function socrataQuery(datasetId, params, { fetchImpl = globalThis.fetch, storage = defaultStorage(), now = Date.now, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
+export async function socrataQuery(datasetId, params, { fetchImpl = globalThis.fetch, storage = defaultStorage(), now = Date.now, timeoutMs = REQUEST_TIMEOUT_MS, signal } = {}) {
   const url = `${PROXY}?${new URLSearchParams({ dataset: datasetId, ...params })}`;
   const t = now();
   const cached = readCache(storage, url, t);
@@ -50,7 +51,7 @@ export async function socrataQuery(datasetId, params, { fetchImpl = globalThis.f
 
   let res;
   try {
-    res = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) });
+    res = await fetchImpl(url, { signal: requestSignal(timeoutMs, signal) });
   } catch (err) {
     throw new RecordsUnavailableError(`network failure: ${err?.message ?? err}`);
   }

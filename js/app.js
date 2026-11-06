@@ -69,19 +69,19 @@ export function locate(geolocation, timeoutMs = GEO_TIMEOUT_MS, onLate = () => {
  * *or processing* a layer marks it in `errors` rather than silently emptying it.
  * onSheds(scored) fires as soon as scaffolding is ready (it is the fast query).
  */
-export async function gatherSurvey(at, today, sources = { fetchSheds, fetchComplaints, fetchWeather }, onSheds = () => {}) {
+export async function gatherSurvey(at, today, sources = { fetchSheds, fetchComplaints, fetchWeather }, onSheds = () => {}, signal = undefined) {
   const result = { sheds: [], puddles: [], defects: [], errors: {} };
 
-  const shedsDone = sources.fetchSheds(at, RADIUS_M)
+  const shedsDone = sources.fetchSheds(at, RADIUS_M, { signal })
     .then((facts) => { result.sheds = facts.map((f) => scoreShed(f, today)); onSheds(result.sheds); })
     .catch((err) => { result.errors.S = true; console.warn('sheds', err); });
 
   // Weather is optional: any failure (network or malformed data) means "unknown" saturation.
-  const weather = sources.fetchWeather(at)
+  const weather = sources.fetchWeather(at, { signal })
     .then((hourly) => summarizeWeather(hourly, new Date()))
     .catch((err) => { console.warn('weather', err); return null; });
 
-  const complaintsDone = sources.fetchComplaints(at, RADIUS_M)
+  const complaintsDone = sources.fetchComplaints(at, RADIUS_M, { signal })
     .then(async (found) => {
       const w = await weather;
       result.puddles = found.puddles.map((p) => scorePuddle(p, w));
@@ -99,6 +99,10 @@ async function main() {
   let reopenSheet = null;
   let user = null;
   let activeRoute = null; // the itinerary drawn on the map, if any
+  let defaultNotice = false; // "surveyed the default location because yours is unknown"
+  let inFlight = null; // AbortController of the survey whose requests are still running
+
+  const renderNotice = () => showNotice(defaultNotice ? theme.messages.defaultLocation : '');
 
   function applyTheme() {
     document.documentElement.dataset.theme = theme.id;
@@ -110,7 +114,8 @@ async function main() {
     theme = Object.values(THEMES).find((t) => t.id !== theme.id);
     saveThemeId(theme.id);
     applyTheme();
-    if (user) placeUser(user.center, user.verified);
+    if (user) map.setUser(user.center, theme.userLabel(user.verified));
+    renderNotice();
     refreshResurvey(theme);
     rerender();
     if (sheetWasOpen && reopenSheet) reopenSheet();
@@ -127,12 +132,19 @@ async function main() {
   const map = createMap(document.getElementById('map'), DEFAULT_CENTER, {
     onMapTap: () => { closeSheet(); map.select(null); },
     // The user chose this view: survey its center and leave zoom/position alone.
-    onUserMove: () => showResurvey(theme, () => survey(map.visibleCenter(panelHeight()), { fit: false })),
+    onUserMove: () => showResurvey(theme, () => {
+      defaultNotice = false; // the survey is now where the user put it, not a fallback
+      renderNotice();
+      survey(map.visibleCenter(panelHeight()), { fit: false });
+    }),
   });
 
   function survey(at, { fit = true } = {}) {
     const id = ++surveyId;
     const current = () => id === surveyId; // results from a superseded survey are discarded
+    inFlight?.abort(); // and its requests are cancelled, sparing the city API quota
+    const controller = new AbortController();
+    inFlight = controller;
     const today = new Date();
 
     closeSheet();
@@ -173,14 +185,16 @@ async function main() {
     };
     show({}, true);
 
-    gatherSurvey(at, today, undefined, (sheds) => { if (current()) show({ sheds }, true); })
-      .then((result) => { if (current()) show(result, false); });
+    gatherSurvey(at, today, undefined, (sheds) => { if (current()) show({ sheds }, true); }, controller.signal)
+      .then((result) => { if (current()) show(result, false); })
+      .finally(() => { if (inFlight === controller) inFlight = null; });
   }
 
   function placeUser(center, verified) {
     user = { center, verified };
     map.setUser(center, theme.userLabel(verified));
-    showNotice(verified ? '' : theme.messages.defaultLocation);
+    defaultNotice = !verified;
+    renderNotice();
   }
 
   const position = await locate(navigator.geolocation, GEO_TIMEOUT_MS, (late) => {

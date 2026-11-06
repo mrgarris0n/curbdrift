@@ -1,3 +1,5 @@
+import { requestSignal } from '../net.js';
+
 const ENDPOINT = 'https://api.open-meteo.com/v1/forecast';
 const HOUR_MS = 3600000;
 const RAIN_HOUR_MM = 0.2;
@@ -5,7 +7,7 @@ const RAIN_HOUR_MM = 0.2;
 /** @typedef {{rain72hMm:number, hoursSinceRain:number|null, dryingKWh:number, meanTempC:number}} WeatherSummary */
 
 /** Hourly rain, sun and temperature around center. Times come back in GMT (no zone suffix). */
-export async function fetchWeather(center, { fetchImpl = globalThis.fetch, timeoutMs = 15000 } = {}) {
+export async function fetchWeather(center, { fetchImpl = globalThis.fetch, timeoutMs = 15000, signal } = {}) {
   const params = new URLSearchParams({
     latitude: center.lat.toFixed(4),
     longitude: center.lon.toFixed(4),
@@ -14,7 +16,7 @@ export async function fetchWeather(center, { fetchImpl = globalThis.fetch, timeo
     forecast_days: '1',
     timezone: 'GMT',
   });
-  const res = await fetchImpl(`${ENDPOINT}?${params}`, { signal: AbortSignal.timeout(timeoutMs) });
+  const res = await fetchImpl(`${ENDPOINT}?${params}`, { signal: requestSignal(timeoutMs, signal) });
   if (!res.ok) throw new Error(`weather HTTP ${res.status}`);
   const body = await res.json();
   const h = body?.hourly;
