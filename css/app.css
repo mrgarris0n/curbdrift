@@ -1,0 +1,58 @@
+/* Layout only. Colors and type come from the active theme stylesheet. */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+.app-header {
+  flex: 0 0 auto;
+  padding: 0.55rem 1rem calc(0.55rem);
+  padding-top: max(0.55rem, env(safe-area-inset-top));
+  font-size: 0.8rem;
+  line-height: 1.35;
+  z-index: 1000;
+}
+
+.stage { position: relative; flex: 1 1 auto; min-height: 0; }
+.map { position: absolute; inset: 0; }
+
+.notice {
+  position: absolute;
+  top: 0.6rem;
+  left: 1rem;
+  right: 3.4rem; /* clear the zoom control */
+  z-index: 900;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 950;
+  max-height: 58%;
+  overflow-y: auto;
+  padding: 0.75rem 1rem;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+.panel h2 { margin: 0 0 0.35rem; }
+.panel .status-line { font-size: 0.72rem; margin: 0.15rem 0 0.4rem; }
+.panel .errors { font-size: 0.72rem; margin: 0.4rem 0 0; padding: 0; list-style: none; }
+.panel .hint { font-size: 0.68rem; margin: 0.5rem 0 0; opacity: 0.75; }
+
+.sheet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.button { padding: 0.35rem 0.6rem; font-size: 0.7rem; cursor: pointer; flex: 0 0 auto; min-height: 2rem; }
+.button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+.leaflet-control-attribution { font-size: 9px; }
+/* Keep attribution visible above the bottom panel. */
+.leaflet-bottom { bottom: var(--panel-h, 0px); }

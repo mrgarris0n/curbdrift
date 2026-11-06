@@ -70,3 +70,13 @@ test('params are encoded', async () => {
   assert.match(f.calls[0].url, /^https:\/\/data\.cityofnewyork\.us\/resource\/abcd-1234\.json\?/);
   assert.match(f.calls[0].url, /%24where=/);
 });
+
+test('a request that never answers times out as RecordsUnavailableError', async () => {
+  const impl = (url, init) => new Promise((_, reject) => {
+    init.signal?.addEventListener('abort', () => reject(init.signal.reason));
+  });
+  await assert.rejects(
+    socrataQuery('abcd-1234', {}, { fetchImpl: impl, storage: null, timeoutMs: 50 }),
+    (err) => err instanceof RecordsUnavailableError && err.status === null,
+  );
+});

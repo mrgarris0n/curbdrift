@@ -1,0 +1,108 @@
+// DOM rendering for header, summary panel, item sheet and notices.
+// All words come from the theme; this module only arranges them.
+
+const $ = (id) => document.getElementById(id);
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function rowsList(rows) {
+  const frag = document.createDocumentFragment();
+  for (const r of rows) {
+    const row = el('div', 'row');
+    row.append(el('span', 'label', r.label), el('span', 'leader'), el('span', 'value', r.value));
+    frag.append(row);
+  }
+  return frag;
+}
+
+// Leaflet's bottom controls (attribution) must sit above whichever panel is showing.
+// Panels also resize on their own (web font arriving, viewport rotation), so observe them.
+let observer = null;
+function syncPanelHeight() {
+  const visible = $('sheet').hidden ? $('summary') : $('sheet');
+  document.documentElement.style.setProperty('--panel-h', `${visible.offsetHeight}px`);
+  if (!observer && typeof ResizeObserver !== 'undefined') {
+    observer = new ResizeObserver(() => syncPanelHeight());
+    observer.observe($('summary'));
+    observer.observe($('sheet'));
+  }
+}
+
+export function renderHeader(theme, radiusM) {
+  document.title = theme.appTitle;
+  $('app-title').textContent = theme.appTitle;
+  $('form-title').textContent = theme.formTitle(radiusM);
+}
+
+let loadingTimer = null;
+let loadingIndex = 0;
+
+/**
+ * @param {{counts:{S:number,P:number,D:number}, rating:number, pending:boolean,
+ *   errors:{S?:boolean,P?:boolean,D?:boolean}}} state
+ */
+export function renderSummary(theme, state) {
+  const box = $('summary');
+  box.replaceChildren();
+  box.append(el('h2', null, theme.messages.summaryTitle));
+
+  const status = el('p', 'status-line');
+  status.id = 'status-line';
+  box.append(status);
+  clearInterval(loadingTimer);
+  if (state.pending) {
+    const tick = () => { status.textContent = theme.messages.loading[loadingIndex++ % theme.messages.loading.length]; };
+    tick();
+    loadingTimer = setInterval(tick, 1600);
+  } else {
+    const total = state.counts.S + state.counts.P + state.counts.D;
+    const anyError = Object.values(state.errors).some(Boolean);
+    status.textContent = total === 0 && !anyError ? theme.messages.empty : theme.messages.final;
+  }
+
+  box.append(rowsList(theme.summaryRows(state.counts, state.rating)));
+
+  const errs = Object.entries(state.errors).filter(([, v]) => v);
+  if (errs.length) {
+    const ul = el('ul', 'errors');
+    for (const [kind] of errs) ul.append(el('li', null, `${theme.kindName[kind]}: ${theme.messages.unavailable}`));
+    box.append(ul);
+  }
+
+  const stamp = el('span', state.pending ? 'stamp provisional' : 'stamp', state.pending ? theme.messages.provisional : theme.messages.final);
+  box.append(stamp, el('p', 'hint', theme.messages.tapHint));
+  syncPanelHeight();
+}
+
+export function openSheet(theme, item, onClose) {
+  const sheet = $('sheet');
+  sheet.replaceChildren();
+  const head = el('div', 'sheet-head');
+  const title = el('h2', null, theme.itemTitle(item));
+  const close = el('button', 'button', theme.messages.close);
+  close.type = 'button';
+  close.addEventListener('click', () => { closeSheet(); onClose?.(); });
+  head.append(title, close);
+  sheet.append(head, rowsList(theme.recordRows(item)), el('span', 'stamp', theme.stamp(item)));
+  sheet.hidden = false;
+  $('summary').hidden = true;
+  syncPanelHeight();
+  close.focus({ preventScroll: true });
+}
+
+export function closeSheet() {
+  $('sheet').hidden = true;
+  $('summary').hidden = false;
+  syncPanelHeight();
+}
+
+export function showNotice(text) {
+  const n = $('notice');
+  n.textContent = text;
+  n.hidden = !text;
+}

@@ -5,7 +5,7 @@ const RAIN_HOUR_MM = 0.2;
 /** @typedef {{rain72hMm:number, hoursSinceRain:number|null, dryingKWh:number, meanTempC:number}} WeatherSummary */
 
 /** Hourly rain, sun and temperature around center. Times come back in GMT (no zone suffix). */
-export async function fetchWeather(center, { fetchImpl = globalThis.fetch } = {}) {
+export async function fetchWeather(center, { fetchImpl = globalThis.fetch, timeoutMs = 15000 } = {}) {
   const params = new URLSearchParams({
     latitude: center.lat.toFixed(4),
     longitude: center.lon.toFixed(4),
@@ -14,7 +14,7 @@ export async function fetchWeather(center, { fetchImpl = globalThis.fetch } = {}
     forecast_days: '1',
     timezone: 'GMT',
   });
-  const res = await fetchImpl(`${ENDPOINT}?${params}`);
+  const res = await fetchImpl(`${ENDPOINT}?${params}`, { signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`weather HTTP ${res.status}`);
   const body = await res.json();
   if (!body?.hourly?.time) throw new Error('weather: unexpected response');

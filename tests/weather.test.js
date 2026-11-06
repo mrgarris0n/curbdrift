@@ -41,3 +41,11 @@ test('rain older than 72h ignored', () => {
   const s = summarizeWeather(hourly(-80, 0, (h) => (h === -75 ? { p: 30 } : {})), NOW);
   assert.equal(s.rain72hMm, 0);
 });
+
+test('fetchWeather gives up on a request that never answers', async () => {
+  const { fetchWeather } = await import('../js/sources/weather.js');
+  const impl = (url, init) => new Promise((_, reject) => {
+    init.signal?.addEventListener('abort', () => reject(init.signal.reason));
+  });
+  await assert.rejects(fetchWeather({ lat: 40.7, lon: -73.9 }, { fetchImpl: impl, timeoutMs: 50 }));
+});
