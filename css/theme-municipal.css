@@ -78,18 +78,27 @@
 
 /* Markers. S = square, P = circle, D = triangle; code label beside each. */
 [data-theme="municipal"] .marker { position: relative; }
-[data-theme="municipal"] .marker .shape { position: absolute; left: 0; top: 0; width: 18px; height: 18px; box-sizing: border-box; }
+[data-theme="municipal"] .marker .shape { position: absolute; left: 7px; top: 7px; width: 18px; height: 18px; box-sizing: border-box; }
 [data-theme="municipal"] .marker-S .shape { border: 2px solid var(--bar); background: rgba(255, 255, 255, 0.75); }
 [data-theme="municipal"] .marker-P .shape { border: 2px solid var(--water); border-radius: 50%; background: rgba(58, 110, 165, 0.15); }
 [data-theme="municipal"] .marker-D .shape {
   width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent;
-  border-bottom: 16px solid var(--defect); top: 1px;
+  border-bottom: 16px solid var(--defect); top: 8px;
 }
 [data-theme="municipal"] .marker .code {
-  position: absolute; left: 21px; top: 2px; white-space: nowrap;
+  position: absolute; left: 28px; top: 9px; white-space: nowrap;
   font: 700 10px/1 var(--font); color: var(--ink);
   background: rgba(251, 250, 245, 0.85); padding: 1px 2px;
 }
 [data-theme="municipal"] .marker.selected .shape { outline: 2px solid var(--stamp); outline-offset: 2px; }
 [data-theme="municipal"] .marker-user .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--stamp); border: 2px solid #fff; box-sizing: border-box; }
 [data-theme="municipal"] .marker-user .code { color: var(--stamp); left: 16px; top: 1px; }
+
+[data-theme="municipal"] .resurvey {
+  background: var(--bar);
+  color: var(--bar-ink);
+  border-color: var(--bar);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}

@@ -7,7 +7,7 @@ import { fetchWeather, summarizeWeather } from './sources/weather.js';
 import { scoreShed, scorePuddle, scoreDefect, areaRating } from './scoring.js';
 import { municipal } from './themes/municipal.js';
 import { createMap } from './map.js';
-import { renderHeader, renderSummary, openSheet, closeSheet, showNotice } from './ui.js';
+import { renderHeader, renderSummary, openSheet, closeSheet, showNotice, showResurvey, hideResurvey } from './ui.js';
 
 const theme = municipal;
 const GEO_TIMEOUT_MS = 8000;
@@ -87,8 +87,13 @@ async function main() {
   renderSummary(theme, { counts: { S: 0, P: 0, D: 0 }, rating: 0, pending: true, errors: {} });
 
   let surveyId = 0;
+  const panelHeight = () => document.getElementById('summary').offsetHeight;
   // The map shows immediately; the survey waits for a location (or the fallback).
-  const map = createMap(document.getElementById('map'), DEFAULT_CENTER, (pick) => survey(pick));
+  // Browsing the map never fetches: moving it only offers a re-survey button.
+  const map = createMap(document.getElementById('map'), DEFAULT_CENTER, {
+    onMapTap: () => { closeSheet(); map.select(null); },
+    onUserMove: () => showResurvey(theme, () => survey(map.visibleCenter(panelHeight()))),
+  });
 
   function survey(at) {
     const id = ++surveyId;
@@ -96,8 +101,9 @@ async function main() {
     const today = new Date();
 
     closeSheet();
+    hideResurvey();
     map.setSurveyArea(at, RADIUS_M);
-    map.fitTo(at, RADIUS_M, document.getElementById('summary').offsetHeight);
+    map.fitTo(at, RADIUS_M, panelHeight());
 
     const render = ({ sheds = [], puddles = [], defects = [], errors = {} }, pending) => {
       const items = assignCodes([...sheds, ...puddles, ...defects], theme);

@@ -106,3 +106,15 @@ export function showNotice(text) {
   n.textContent = text;
   n.hidden = !text;
 }
+
+/** Offer a re-survey after the user moves the map. Data is only fetched when it is pressed. */
+export function showResurvey(theme, onPress) {
+  const btn = $('resurvey');
+  btn.textContent = theme.messages.resurvey;
+  btn.onclick = () => { hideResurvey(); onPress(); };
+  btn.hidden = false;
+}
+
+export function hideResurvey() {
+  $('resurvey').hidden = true;
+}

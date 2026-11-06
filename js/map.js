@@ -21,20 +21,20 @@ function iconHtml(className, codeText, shapeClass = 'shape') {
  * @returns {{setUser(center, label): void, setSurveyArea(center, radiusM): void,
  *   setItems(items, onSelect): void, select(id): void, fitTo(center, radiusM): void}}
  */
-export function createMap(el, center, onPick) {
+/**
+ * Browsing the map (pan, zoom, tap) never fetches data. Callbacks:
+ *   onMapTap()   — a tap on empty map (used to close an open file)
+ *   onUserMove() — the user panned or zoomed (used to offer a re-survey)
+ */
+export function createMap(el, center, { onMapTap, onUserMove }) {
   const L = globalThis.L;
   const map = L.map(el, { zoomControl: false }).setView([center.lat, center.lon], 16);
   L.tileLayer(TILE_URL, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
   L.control.zoom({ position: 'topright' }).addTo(map);
-  // Leaflet fires `click` for each tap of a double-tap. Wait briefly so a double-tap zooms
-  // instead of starting (and then re-fitting) two surveys.
-  const DOUBLE_TAP_MS = 300;
-  let pendingPick = null;
-  map.on('click', (e) => {
-    clearTimeout(pendingPick);
-    pendingPick = setTimeout(() => onPick({ lat: e.latlng.lat, lon: e.latlng.lng }), DOUBLE_TAP_MS);
-  });
-  map.on('dblclick', () => clearTimeout(pendingPick));
+  map.on('click', () => onMapTap());
+  // Moves made by fitTo() are ours, not the user's.
+  let fitting = false;
+  map.on('moveend', () => { if (!fitting) onUserMove(); });
 
   const items = L.layerGroup().addTo(map);
   const markersById = new Map();
@@ -65,7 +65,8 @@ export function createMap(el, center, onPick) {
       items.clearLayers();
       markersById.clear();
       for (const item of list) {
-        const icon = L.divIcon({ className: `marker marker-${item.kind}`, html: iconHtml('', item.code), iconSize: [18, 18], iconAnchor: [9, 9] });
+        // 32px tap target around an 18px drawn shape: fingers are not styluses.
+        const icon = L.divIcon({ className: `marker marker-${item.kind}`, html: iconHtml('', item.code), iconSize: [32, 32], iconAnchor: [16, 16] });
         const m = L.marker([item.lat, item.lon], { icon, title: item.code, alt: item.code, riseOnHover: true });
         m.on('click', (e) => {
           L.DomEvent.stopPropagation(e);
@@ -86,10 +87,20 @@ export function createMap(el, center, onPick) {
 
     /** Fit the survey circle into the part of the map not covered by the bottom panel. */
     fitTo(c, radiusM, coveredBottomPx = 0) {
+      fitting = true; // not animated, so its moveend fires synchronously inside this call
       map.fitBounds(L.latLng(c.lat, c.lon).toBounds(radiusM * 2), {
         paddingTopLeft: [8, 8],
         paddingBottomRight: [8, 8 + coveredBottomPx],
+        animate: false,
       });
+      fitting = false;
+    },
+
+    /** Center of the part of the map the bottom panel does not cover. */
+    visibleCenter(coveredBottomPx = 0) {
+      const size = map.getSize();
+      const ll = map.containerPointToLatLng([size.x / 2, (size.y - coveredBottomPx) / 2]);
+      return { lat: ll.lat, lon: ll.lng };
     },
   };
 }

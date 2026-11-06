@@ -54,5 +54,17 @@ body {
 .button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 
 .leaflet-control-attribution { font-size: 9px; }
+.resurvey {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--panel-h, 0px) + 1.6rem);
+  z-index: 960;
+  min-height: 2.6rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+}
+.resurvey[hidden] { display: none; }
+
 /* Keep attribution visible above the bottom panel. */
 .leaflet-bottom { bottom: var(--panel-h, 0px); }

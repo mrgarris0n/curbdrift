@@ -45,6 +45,8 @@ test('fixed messages', () => {
   assert.equal(theme.messages.defaultLocation, 'Applicant location not on file. Survey conducted at default jurisdiction.');
   assert.equal(theme.messages.provisional, 'PROVISIONAL — RECORDS PENDING');
   assert.equal(theme.messages.empty, 'No deterioration on file. This is itself suspicious.');
+  assert.equal(theme.messages.resurvey, 'SURVEY THIS AREA');
+  assert.doesNotMatch(theme.messages.tapHint, /tap the map to survey/i);
   assert.ok(theme.messages.loading.includes('Retrieving records…'));
   assert.ok(theme.messages.loading.includes('Consulting the Department of Buildings…'));
 });
