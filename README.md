@@ -1,0 +1,83 @@
+# curbdrift
+
+**A municipal survey of nearby deterioration.** Open it on your phone in New York City and it maps the most neglected things around you: sidewalk sheds that have stood for years, puddles that are probably there right now, and broken sidewalk, all from live public records.
+
+**Live:** https://curbdrift.vercel.app
+
+It is a deliberately over-engineered answer to a question nobody asked. The numbers are real; the seriousness is the joke.
+
+---
+
+## What it does
+
+- **Decay map.** Surveys a 400 m radius around you (or Union Square, if location is unavailable) and plots three kinds of items:
+  - **S: sheds and scaffolds.** Active DOB permits, scored by how long the structure has stood *continuously*. Yearly permit renewals are chained together, and a gap of 60+ days breaks the chain.
+  - **P: probable puddles.** Locations with repeated 311 flooding or catch-basin complaints, weighted by the last 72 hours of rain minus a drying term from sunshine and temperature.
+  - **D: sidewalk defects.** Recent 311 sidewalk-condition reports (collapsed sidewalk, open cellar doors, sign stumps…).
+- **Item files.** Tap anything for its record: years standing, permit renewals, mayors outlasted, owner of record, saturation index.
+- **Walking itineraries.** "ISSUE WALKING ITINERARY" plans a loop from the survey center through the worst things within reach (at most 12 stops, about 2 km).
+- **Two voices.** *Municipal paperwork* (forms, case codes, rubber stamps) or *Field guide* (warm, observational narration of the same facts). Switch in the header; the choice is remembered per browser.
+- **Browsing is free.** Panning and zooming never fetch data; "SURVEY THIS AREA" surveys wherever you have moved the map.
+
+## Honesty rules
+
+- Every number shown comes from an API or from a formula documented in [`js/scoring.js`](js/scoring.js) or [`js/route.js`](js/route.js). The precision is fake; the facts are not.
+- Walking distances are straight lines × 1.3 (an allowance for the street grid), and the itinerary says so. There is no street routing.
+- Permit history only goes back to 2017 (when DOB NOW began), so "in continuous service since" never predates that.
+
+## Data sources
+
+All are free and public. NYC Open Data is reached through this app's own proxy; the weather is fetched directly.
+
+| Data | Source |
+| --- | --- |
+| Sheds and scaffolds | NYC Open Data — [DOB NOW: Build – Approved Permits](https://data.cityofnewyork.us/d/rbx6-tga4) (`rbx6-tga4`), work types Sidewalk Shed / Supported Scaffold / Suspended Scaffold |
+| Flooding, catch basins, sidewalk defects | NYC Open Data — [311 Service Requests](https://data.cityofnewyork.us/d/erm2-nwe9) (`erm2-nwe9`) |
+| Rain, sunshine, temperature | [Open-Meteo](https://open-meteo.com/) forecast API (past 72 hours) |
+| Map tiles | © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors |
+
+## How it works
+
+A static site (plain HTML, CSS and ES modules, no framework, no build step beyond copying files) plus one serverless function.
+
+```
+index.html, css/        page and the two themes (scoped by [data-theme])
+js/app.js               orchestration: locate → survey → render
+js/sources/*.js         fetching: DOB permits, 311 complaints, weather
+js/scoring.js           all scoring formulas (facts in, numbers and keys out)
+js/route.js             the itinerary planner
+js/themes/*.js          every user-visible word, one module per theme
+js/map.js, js/ui.js     Leaflet map and DOM rendering
+api/socrata.js          proxy to NYC Open Data that adds the app token server-side
+```
+
+The browser calls `/api/socrata` rather than NYC Open Data directly, so the Socrata app token stays on the server. The proxy only accepts the two datasets and the query fields the app uses, caps the row count, and caches successful answers at the edge for 5 minutes.
+
+## Running it
+
+Requires Node 22+ (tests use the built-in runner, no dependencies) and the [Vercel CLI](https://vercel.com/docs/cli) for local serving.
+
+```bash
+npm test          # unit tests: scoring, planner, data parsing, proxy, themes
+vercel dev        # local server with the /api proxy
+```
+
+A plain static file server will show the page but cannot run `/api/socrata`, so no data loads.
+
+### Deploying your own
+
+1. Get a free Socrata app token from NYC Open Data (developer settings in your profile).
+2. Set it as an environment variable for your Vercel project:
+   ```bash
+   vercel env add SOCRATA_APP_TOKEN --environment production
+   ```
+3. Deploy with `vercel deploy --prod`. `vercel.json` copies the site into `dist/`, and `api/` is deployed as a function.
+
+The app works without a token, but anonymous requests are rate-limited heavily.
+
+## Limitations
+
+- New York City only.
+- No street routing; itinerary distances are estimates.
+- The Area Deterioration Rating saturates at 100.0 in dense parts of Manhattan.
+- Puddle likelihood is inferred from complaints and weather, not measured.
