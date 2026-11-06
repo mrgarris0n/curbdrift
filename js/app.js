@@ -92,10 +92,11 @@ async function main() {
   // Browsing the map never fetches: moving it only offers a re-survey button.
   const map = createMap(document.getElementById('map'), DEFAULT_CENTER, {
     onMapTap: () => { closeSheet(); map.select(null); },
-    onUserMove: () => showResurvey(theme, () => survey(map.visibleCenter(panelHeight()))),
+    // The user chose this view: survey its center and leave zoom/position alone.
+    onUserMove: () => showResurvey(theme, () => survey(map.visibleCenter(panelHeight()), { fit: false })),
   });
 
-  function survey(at) {
+  function survey(at, { fit = true } = {}) {
     const id = ++surveyId;
     const current = () => id === surveyId; // results from a superseded survey are discarded
     const today = new Date();
@@ -103,7 +104,7 @@ async function main() {
     closeSheet();
     hideResurvey();
     map.setSurveyArea(at, RADIUS_M);
-    map.fitTo(at, RADIUS_M, panelHeight());
+    if (fit) map.fitTo(at, RADIUS_M, panelHeight());
 
     const render = ({ sheds = [], puddles = [], defects = [], errors = {} }, pending) => {
       const items = assignCodes([...sheds, ...puddles, ...defects], theme);
