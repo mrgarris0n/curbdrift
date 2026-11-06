@@ -26,7 +26,15 @@ export function createMap(el, center, onPick) {
   const map = L.map(el, { zoomControl: false }).setView([center.lat, center.lon], 16);
   L.tileLayer(TILE_URL, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
   L.control.zoom({ position: 'topright' }).addTo(map);
-  map.on('click', (e) => onPick({ lat: e.latlng.lat, lon: e.latlng.lng }));
+  // Leaflet fires `click` for each tap of a double-tap. Wait briefly so a double-tap zooms
+  // instead of starting (and then re-fitting) two surveys.
+  const DOUBLE_TAP_MS = 300;
+  let pendingPick = null;
+  map.on('click', (e) => {
+    clearTimeout(pendingPick);
+    pendingPick = setTimeout(() => onPick({ lat: e.latlng.lat, lon: e.latlng.lng }), DOUBLE_TAP_MS);
+  });
+  map.on('dblclick', () => clearTimeout(pendingPick));
 
   const items = L.layerGroup().addTo(map);
   const markersById = new Map();

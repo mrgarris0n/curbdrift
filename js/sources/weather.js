@@ -17,7 +17,9 @@ export async function fetchWeather(center, { fetchImpl = globalThis.fetch, timeo
   const res = await fetchImpl(`${ENDPOINT}?${params}`, { signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`weather HTTP ${res.status}`);
   const body = await res.json();
-  if (!body?.hourly?.time) throw new Error('weather: unexpected response');
+  const h = body?.hourly;
+  const arrays = [h?.time, h?.precipitation, h?.shortwave_radiation, h?.temperature_2m];
+  if (!arrays.every(Array.isArray)) throw new Error('weather: unexpected response');
   return body.hourly;
 }
 

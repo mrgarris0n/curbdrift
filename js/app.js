@@ -1,5 +1,5 @@
 // Orchestration: locate → survey → render; tap the map to survey somewhere else.
-import { RADIUS_M } from './config.js';
+import { RADIUS_M, DEFAULT_CENTER } from './config.js';
 import { resolveStart } from './geo.js';
 import { fetchSheds } from './sources/sheds.js';
 import { fetchComplaints } from './sources/complaints.js';
@@ -22,77 +22,109 @@ export function assignCodes(items, th) {
 }
 
 /**
- * The user's position, or null. The browser's own timeout only starts after permission is
- * granted, so an unanswered prompt would wait forever; our own timer caps the whole wait.
+ * The user's position, or null after timeoutMs. The browser's own timeout only starts after
+ * permission is granted, so an unanswered prompt would wait forever; our timer caps the wait.
+ * A fix that arrives after the cap is handed to onLate instead of being thrown away.
  */
-export function locate(geolocation, timeoutMs = GEO_TIMEOUT_MS) {
+export function locate(geolocation, timeoutMs = GEO_TIMEOUT_MS, onLate = () => {}) {
   return new Promise((resolve) => {
     if (!geolocation) return resolve(null);
-    const timer = setTimeout(() => resolve(null), timeoutMs);
-    const done = (value) => { clearTimeout(timer); resolve(value); };
+    let settled = false;
+    const timer = setTimeout(() => { settled = true; resolve(null); }, timeoutMs);
+    const success = (p) => {
+      const pos = { lat: p.coords.latitude, lon: p.coords.longitude };
+      if (settled) return onLate(pos);
+      settled = true;
+      clearTimeout(timer);
+      resolve(pos);
+    };
+    const failure = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(null);
+    };
     try {
-      geolocation.getCurrentPosition(
-        (p) => done({ lat: p.coords.latitude, lon: p.coords.longitude }),
-        () => done(null),
-        { timeout: timeoutMs, maximumAge: 60000, enableHighAccuracy: true },
-      );
+      // A 400 m survey does not need GPS precision; the network fix is much faster.
+      geolocation.getCurrentPosition(success, failure, { timeout: 30000, maximumAge: 60000, enableHighAccuracy: false });
     } catch {
-      done(null);
+      failure();
     }
   });
+}
+
+/**
+ * Fetch and score all three layers. Each layer fails on its own: any error while fetching
+ * *or processing* a layer marks it in `errors` rather than silently emptying it.
+ * onSheds(scored) fires as soon as scaffolding is ready (it is the fast query).
+ */
+export async function gatherSurvey(at, today, sources = { fetchSheds, fetchComplaints, fetchWeather }, onSheds = () => {}) {
+  const result = { sheds: [], puddles: [], defects: [], errors: {} };
+
+  const shedsDone = sources.fetchSheds(at, RADIUS_M)
+    .then((facts) => { result.sheds = facts.map((f) => scoreShed(f, today)); onSheds(result.sheds); })
+    .catch((err) => { result.errors.S = true; console.warn('sheds', err); });
+
+  // Weather is optional: any failure (network or malformed data) means "unknown" saturation.
+  const weather = sources.fetchWeather(at)
+    .then((hourly) => summarizeWeather(hourly, new Date()))
+    .catch((err) => { console.warn('weather', err); return null; });
+
+  const complaintsDone = sources.fetchComplaints(at, RADIUS_M)
+    .then(async (found) => {
+      const w = await weather;
+      result.puddles = found.puddles.map((p) => scorePuddle(p, w));
+      result.defects = found.defects.map(scoreDefect);
+    })
+    .catch((err) => { result.puddles = []; result.defects = []; result.errors.P = true; result.errors.D = true; console.warn('311', err); });
+
+  await Promise.all([shedsDone, complaintsDone]);
+  return result;
 }
 
 async function main() {
   renderHeader(theme, RADIUS_M);
   renderSummary(theme, { counts: { S: 0, P: 0, D: 0 }, rating: 0, pending: true, errors: {} });
 
-  const { center, verified } = resolveStart(await locate(navigator.geolocation));
-  if (!verified) showNotice(theme.messages.defaultLocation);
-
   let surveyId = 0;
-  const map = createMap(document.getElementById('map'), center, (pick) => survey(pick));
-  map.setUser(center, theme.userLabel(verified));
+  // The map shows immediately; the survey waits for a location (or the fallback).
+  const map = createMap(document.getElementById('map'), DEFAULT_CENTER, (pick) => survey(pick));
 
   function survey(at) {
     const id = ++surveyId;
     const current = () => id === surveyId; // results from a superseded survey are discarded
     const today = new Date();
-    let sheds = [];
-    let puddles = [];
-    let defects = [];
-    const errors = {};
 
     closeSheet();
     map.setSurveyArea(at, RADIUS_M);
     map.fitTo(at, RADIUS_M, document.getElementById('summary').offsetHeight);
 
-    const render = (pending) => {
+    const render = ({ sheds = [], puddles = [], defects = [], errors = {} }, pending) => {
       const items = assignCodes([...sheds, ...puddles, ...defects], theme);
       map.setItems(items, (item) => openSheet(theme, item, () => map.select(null)));
       const counts = { S: sheds.length, P: puddles.length, D: defects.length };
       renderSummary(theme, { counts, rating: areaRating(items), pending, errors });
     };
-    render(true);
+    render({}, true);
 
-    const shedsDone = fetchSheds(at, RADIUS_M).then(
-      (facts) => { if (current()) { sheds = facts.map((f) => scoreShed(f, today)); render(true); } },
-      (err) => { if (current()) { errors.S = true; console.warn('sheds', err); } },
-    );
-
-    const weather = fetchWeather(at).then((h) => summarizeWeather(h, new Date()), (err) => { console.warn('weather', err); return null; });
-    const complaintsDone = fetchComplaints(at, RADIUS_M).then(
-      async (found) => {
-        const w = await weather;
-        if (!current()) return;
-        puddles = found.puddles.map((p) => scorePuddle(p, w));
-        defects = found.defects.map(scoreDefect);
-      },
-      (err) => { if (current()) { errors.P = true; errors.D = true; console.warn('311', err); } },
-    );
-
-    Promise.allSettled([shedsDone, complaintsDone]).then(() => { if (current()) render(false); });
+    gatherSurvey(at, today, undefined, (sheds) => { if (current()) render({ sheds }, true); })
+      .then((result) => { if (current()) render(result, false); });
   }
 
+  const placeUser = (center, verified) => {
+    map.setUser(center, theme.userLabel(verified));
+    showNotice(verified ? '' : theme.messages.defaultLocation);
+  };
+
+  const position = await locate(navigator.geolocation, GEO_TIMEOUT_MS, (late) => {
+    // Permission or the fix came after we gave up: move the survey to the real position.
+    const { center, verified } = resolveStart(late);
+    if (!verified) return;
+    placeUser(center, true);
+    survey(center);
+  });
+  const { center, verified } = resolveStart(position);
+  placeUser(center, verified);
   survey(center);
 }
 

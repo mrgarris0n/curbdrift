@@ -49,3 +49,9 @@ test('fetchWeather gives up on a request that never answers', async () => {
   });
   await assert.rejects(fetchWeather({ lat: 40.7, lon: -73.9 }, { fetchImpl: impl, timeoutMs: 50 }));
 });
+
+test('fetchWeather rejects a 200 response missing hourly arrays', async () => {
+  const { fetchWeather } = await import('../js/sources/weather.js');
+  const impl = async () => ({ ok: true, status: 200, json: async () => ({ hourly: { time: ['2026-11-05T00:00'] } }) });
+  await assert.rejects(fetchWeather({ lat: 40.7, lon: -73.9 }, { fetchImpl: impl }));
+});
