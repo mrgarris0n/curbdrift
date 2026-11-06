@@ -4,3 +4,8 @@ dist/
 .vercel/
 .vercel
 .env*
+
+# Local planning docs (not published)
+docs/
+ironic_software_master_plan.md
+urban_anomaly_data_sources.md
