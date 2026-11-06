@@ -81,3 +81,7 @@ The app works without a token, but anonymous requests are rate-limited heavily.
 - No street routing; itinerary distances are estimates.
 - The Area Deterioration Rating saturates at 100.0 in dense parts of Manhattan.
 - Puddle likelihood is inferred from complaints and weather, not measured.
+
+## License
+
+[MIT](LICENSE)
