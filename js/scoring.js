@@ -10,6 +10,16 @@
  *     mayorsOutlasted = mayoral terms that began after chainStart and on/before today
  *     score           = min(100, yearsContinuous / 9 × 100)   (9 years ≈ all of DOB NOW history)
  *
+ *   Puddle (P) — "Saturation Index", 0–100, two decimals; null when weather is unknown
+ *     effectiveWater = max(0, rain72hMm − 1.2 × dryingKWh × (1 + max(0, meanTempC)/25))
+ *     repeat         = min(complaintCount, 5) / 5
+ *     saturation     = 100 × min(effectiveWater / 20, 1) × (0.5 + 0.5 × repeat)
+ *     statusKey      = null 'unknown' | <15 'dormant' | <60 'probable' | else 'peak'
+ *     score          = saturation ?? 0
+ *
+ *   Defect (D)
+ *     score = 60 open / 30 closed, +10 for 'Sidewalk Collapsed' or 'Cellar Door Open/Unprotected'
+ *
  *   Area Deterioration Rating
  *     rating = min(100, Σ item scores / 10), rounded to one decimal
  */
@@ -47,4 +57,30 @@ export function scoreShed(facts, today) {
 export function areaRating(scoredItems) {
   const sum = scoredItems.reduce((acc, item) => acc + (item.score || 0), 0);
   return Math.min(100, round(sum / 10, 1));
+}
+
+export function saturationIndex(complaintCount, weather) {
+  if (!weather) return null;
+  const tempFactor = 1 + Math.max(0, weather.meanTempC) / 25;
+  const effectiveWater = Math.max(0, weather.rain72hMm - 1.2 * weather.dryingKWh * tempFactor);
+  const repeat = Math.min(complaintCount, 5) / 5;
+  return round(100 * Math.min(effectiveWater / 20, 1) * (0.5 + 0.5 * repeat), 2);
+}
+
+export function puddleStatus(saturation) {
+  if (saturation === null || saturation === undefined) return 'unknown';
+  if (saturation < 15) return 'dormant';
+  if (saturation < 60) return 'probable';
+  return 'peak';
+}
+
+export function scorePuddle(facts, weather) {
+  const saturation = saturationIndex(facts.complaintCount, weather);
+  return { ...facts, saturation, statusKey: puddleStatus(saturation), score: saturation ?? 0 };
+}
+
+const SEVERE_DEFECTS = new Set(['Sidewalk Collapsed', 'Cellar Door Open/Unprotected']);
+
+export function scoreDefect(facts) {
+  return { ...facts, score: (facts.closed ? 30 : 60) + (SEVERE_DEFECTS.has(facts.descriptor) ? 10 : 0) };
 }
