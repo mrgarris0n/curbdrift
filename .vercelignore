@@ -2,3 +2,5 @@ docs/
 tests/
 .superpowers/
 dist/
+.env*
+.vercel/
