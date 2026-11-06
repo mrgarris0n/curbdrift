@@ -86,12 +86,20 @@ export function createMap(el, center, { onMapTap, onUserMove }) {
 
     select,
 
-    /** Draw the itinerary loop through the given points, or clear it with null. */
-    setRoute(points) {
+    /**
+     * Draw the itinerary loop through the given points (or clear it with null). Markers not on
+     * the route are dimmed, and the view fits the loop above the bottom panel.
+     */
+    setRoute(points, coveredBottomPx = 0) {
       routeLine?.remove();
-      routeLine = points
-        ? L.polyline(points.map((pt) => [pt.lat, pt.lon]), { className: 'route-line', weight: 3, dashArray: '6 6', interactive: false }).addTo(map)
-        : null;
+      routeLine = null;
+      const onRoute = new Set((points ?? []).map((pt) => pt.id).filter(Boolean));
+      for (const [id, m] of markersById) m.getElement()?.classList.toggle('off-route', Boolean(points) && !onRoute.has(id));
+      if (!points) return;
+      routeLine = L.polyline(points.map((pt) => [pt.lat, pt.lon]), { className: 'route-line', weight: 3, dashArray: '6 6', interactive: false }).addTo(map);
+      fitting = true;
+      map.fitBounds(routeLine.getBounds(), { paddingTopLeft: [24, 24], paddingBottomRight: [24, 24 + coveredBottomPx], animate: false, maxZoom: 18 });
+      fitting = false;
     },
 
     /** Fit the survey circle into the part of the map not covered by the bottom panel. */

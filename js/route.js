@@ -9,6 +9,8 @@ import { distanceM } from './geo.js';
 export const WALK_FACTOR = 1.3;
 export const WALK_M_PER_MIN = 80; // ≈ 4.8 km/h
 export const DEFAULT_BUDGET_M = 2000;
+// A walk, not an audit: beyond this many stops an itinerary stops being followable.
+export const MAX_STOPS = 12;
 
 const walk = (a, b) => distanceM(a, b) * WALK_FACTOR;
 
@@ -16,6 +18,7 @@ const walk = (a, b) => distanceM(a, b) * WALK_FACTOR;
  * @param {{lat:number, lon:number}} start
  * @param {Array<{id:string, lat:number, lon:number, score:number}>} items
  * @param {number} budgetM total walking distance allowed, including the return to start
+ *   (and at most MAX_STOPS stops)
  * @returns {{stops: Array<object>, distanceM:number, minutes:number, totalScore:number}}
  *   stops are the chosen items in walking order, each with legM (from the previous point)
  *   and atM (cumulative from the start).
@@ -25,7 +28,7 @@ export function planRoute(start, items, budgetM = DEFAULT_BUDGET_M) {
   let total = 0;
   const remaining = items.filter((it) => it.score > 0 && Number.isFinite(it.lat) && Number.isFinite(it.lon));
 
-  for (;;) {
+  while (path.length - 2 < MAX_STOPS) {
     let best = null;
     for (let k = 0; k < remaining.length; k++) {
       const it = remaining[k];

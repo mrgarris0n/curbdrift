@@ -66,3 +66,13 @@ test('route distances use the shared haversine', () => {
   const r = planRoute(START, [p], 2000);
   assert.ok(Math.abs(r.distanceM - 2 * distanceM(START, p) * WALK_FACTOR) < 0.01);
 });
+
+test('at most MAX_STOPS stops, keeping the best decay per meter', async () => {
+  const { MAX_STOPS } = await import('../js/route.js');
+  assert.equal(MAX_STOPS, 12);
+  const items = [];
+  for (let i = 0; i < 40; i++) items.push(item(`i${i}`, i === 7 ? 1000 : 10, 50 + i * 5, 0));
+  const r = planRoute(START, items, 5000);
+  assert.equal(r.stops.length, 12);
+  assert.ok(r.stops.some((s) => s.id === 'i7'), 'the standout item is kept');
+});

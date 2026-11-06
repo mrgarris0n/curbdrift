@@ -105,3 +105,4 @@
 [data-theme="municipal"] .route-line { stroke: var(--stamp); }
 [data-theme="municipal"] .route-button { border-width: 2px; }
 [data-theme="municipal"] .rule { border-top: 1px solid var(--rule); }
+[data-theme="municipal"] .marker.off-route { opacity: 0.22; }

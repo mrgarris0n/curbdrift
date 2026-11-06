@@ -115,8 +115,9 @@ async function main() {
       // The itinerary loops from the survey center through the items of this survey.
       const onRoute = () => {
         const route = planRoute(at, items);
-        map.setRoute(route.stops.length ? [at, ...route.stops, at] : null);
         openRoute(theme, route, () => map.setRoute(null));
+        // After the sheet is open, so the view fits the loop above it.
+        map.setRoute(route.stops.length ? [at, ...route.stops, at] : null, document.getElementById('sheet').offsetHeight);
       };
       renderSummary(theme, { counts, rating: areaRating(items), pending, errors, onRoute });
     };
