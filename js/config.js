@@ -1,9 +1,5 @@
 // Fixed values for the decay survey. See docs/superpowers/specs/2026-11-06-curbdrift-decay-map-design.md.
 
-// Socrata app tokens are public identifiers (not secrets); they raise anonymous rate limits.
-// Leave empty to run unauthenticated.
-export const SOCRATA_APP_TOKEN = '';
-
 // Union Square — verified to have sheds on record since 2017.
 export const DEFAULT_CENTER = Object.freeze({ lat: 40.7359, lon: -73.9911 });
 

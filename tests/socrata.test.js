@@ -67,7 +67,7 @@ test('storage that throws is ignored', async () => {
 test('params are encoded', async () => {
   const f = fakeFetch([]);
   await socrataQuery('abcd-1234', { $where: "a = 'b c'" }, { fetchImpl: f.impl, storage: null });
-  assert.match(f.calls[0].url, /^https:\/\/data\.cityofnewyork\.us\/resource\/abcd-1234\.json\?/);
+  assert.match(f.calls[0].url, /^\/api\/socrata\?dataset=abcd-1234&/);
   assert.match(f.calls[0].url, /%24where=/);
 });
 
@@ -79,4 +79,10 @@ test('a request that never answers times out as RecordsUnavailableError', async 
     socrataQuery('abcd-1234', {}, { fetchImpl: impl, storage: null, timeoutMs: 50 }),
     (err) => err instanceof RecordsUnavailableError && err.status === null,
   );
+});
+
+test('the browser never sends an app token (the proxy adds it)', async () => {
+  const f = fakeFetch([]);
+  await socrataQuery('abcd-1234', {}, { fetchImpl: f.impl, storage: null });
+  assert.equal(f.calls[0].init.headers?.['X-App-Token'], undefined);
 });

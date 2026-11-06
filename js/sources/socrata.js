@@ -1,6 +1,7 @@
-import { SOCRATA_APP_TOKEN, CACHE_TTL_MS } from '../config.js';
+import { CACHE_TTL_MS } from '../config.js';
 
-const BASE = 'https://data.cityofnewyork.us/resource/';
+// Our own proxy (api/socrata.js) forwards to NYC Open Data and adds the app token server-side.
+const PROXY = '/api/socrata';
 // The 311 radius query alone measured ~7 s; past this the records office is treated as unavailable.
 const REQUEST_TIMEOUT_MS = 30000;
 
@@ -42,15 +43,14 @@ function writeCache(storage, key, now, rows) {
 
 /** Query a NYC Open Data (Socrata) dataset. Resolves to the row array. */
 export async function socrataQuery(datasetId, params, { fetchImpl = globalThis.fetch, storage = defaultStorage(), now = Date.now, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
-  const url = `${BASE}${datasetId}.json?${new URLSearchParams(params)}`;
+  const url = `${PROXY}?${new URLSearchParams({ dataset: datasetId, ...params })}`;
   const t = now();
   const cached = readCache(storage, url, t);
   if (cached) return cached;
 
-  const headers = SOCRATA_APP_TOKEN ? { 'X-App-Token': SOCRATA_APP_TOKEN } : {};
   let res;
   try {
-    res = await fetchImpl(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+    res = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) });
   } catch (err) {
     throw new RecordsUnavailableError(`network failure: ${err?.message ?? err}`);
   }
