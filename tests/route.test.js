@@ -35,7 +35,7 @@ test('the walk never exceeds the budget', () => {
 });
 
 test('an item too far for the budget is left out', () => {
-  const r = planRoute(START, [item('near', 10, 100, 0), item('far', 100, 2000, 0)], 1000);
+  const r = planRoute(START, [item('near', 20, 100, 0), item('far', 100, 2000, 0)], 1000);
   assert.deepEqual(r.stops.map((s) => s.id), ['near']);
 });
 
@@ -71,7 +71,7 @@ test('at most MAX_STOPS stops, keeping the best decay per meter', async () => {
   const { MAX_STOPS } = await import('../js/route.js');
   assert.equal(MAX_STOPS, 12);
   const items = [];
-  for (let i = 0; i < 40; i++) items.push(item(`i${i}`, i === 7 ? 1000 : 10, 50 + i * 5, 0));
+  for (let i = 0; i < 40; i++) items.push(item(`i${i}`, i === 7 ? 1000 : 20, 50 + i * 5, 0));
   const r = planRoute(START, items, 5000);
   assert.equal(r.stops.length, 12);
   assert.ok(r.stops.some((s) => s.id === 'i7'), 'the standout item is kept');
@@ -84,4 +84,45 @@ test('when the stop cap binds, the worst reachable items win over nearer lesser 
   const r = planRoute(START, items, 2000);
   assert.equal(r.stops.length, 12);
   assert.ok(r.stops.every((s) => s.id.startsWith('bad')), r.stops.map((s) => s.id).join(','));
+});
+
+const ofKind = (kind, id, score, northM, eastM) => ({ ...item(id, score, northM, eastM), kind });
+const countKinds = (stops) => stops.reduce((c, s) => ({ ...c, [s.kind]: (c[s.kind] ?? 0) + 1 }), {});
+
+test('kinds take turns, so a few worse sheds cannot crowd out every defect and puddle', () => {
+  const items = [];
+  for (let i = 0; i < 20; i++) items.push(ofKind('S', `s${i}`, 90, 100 + i * 8, 0));
+  for (let i = 0; i < 5; i++) items.push(ofKind('D', `d${i}`, 60, 0, 100 + i * 8));
+  for (let i = 0; i < 3; i++) items.push(ofKind('P', `p${i}`, 50, -100 - i * 8, 0));
+  const r = planRoute(START, items, 5000);
+  assert.equal(r.stops.length, 12);
+  // Rounds of S,D,P until puddles run out (3), then S,D, then S: 5 sheds, 4 defects, 3 puddles.
+  assert.deepEqual(countKinds(r.stops), { S: 5, D: 4, P: 3 });
+});
+
+test('within a kind, the worst still go first', () => {
+  const items = [ofKind('D', 'mild', 30, 0, 100), ofKind('D', 'severe', 70, 0, 120), ofKind('S', 's', 90, 100, 0)];
+  const r = planRoute(START, items, 5000);
+  assert.ok(r.stops.some((s) => s.id === 'severe'));
+  assert.equal(r.stops.length, 3);
+});
+
+test('a single kind still fills the walk', () => {
+  const items = [];
+  for (let i = 0; i < 20; i++) items.push(ofKind('S', `s${i}`, 90 - i, 100 + i * 8, 0));
+  assert.equal(planRoute(START, items, 5000).stops.length, 12);
+});
+
+test('items at the same spot (one building) take one stop, the worst one', () => {
+  const items = [ofKind('S', 'shed-a', 50, 200, 0), ofKind('D', 'defect-same-spot', 70, 200, 0.5), ofKind('S', 'shed-b', 40, 200, 1)];
+  const r = planRoute(START, items, 5000);
+  assert.deepEqual(r.stops.map((s) => s.id), ['defect-same-spot']);
+});
+
+test('items below MIN_DETOUR_SCORE are never stops, even when their kind has nothing better', async () => {
+  const { MIN_DETOUR_SCORE } = await import('../js/route.js');
+  assert.equal(MIN_DETOUR_SCORE, 15);
+  const items = [ofKind('S', 'old-shed', 80, 100, 0), ofKind('P', 'dry-puddle', 8, 0, 100), ofKind('P', 'wet-puddle', 40, 0, 150), ofKind('S', 'new-shed', 10, 50, 50)];
+  const ids = planRoute(START, items, 5000).stops.map((s) => s.id).sort();
+  assert.deepEqual(ids, ['old-shed', 'wet-puddle']);
 });

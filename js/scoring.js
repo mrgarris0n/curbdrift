@@ -21,7 +21,9 @@
  *     score = 60 open / 30 closed, +10 for 'Sidewalk Collapsed' or 'Cellar Door Open/Unprotected'
  *
  *   Area Deterioration Rating
- *     rating = min(100, Σ item scores / 10), rounded to one decimal
+ *     rating = mean of the 10 highest item scores, missing slots counting as 0, one decimal.
+ *     Rewards both how bad the worst things are and having enough of them; unlike a capped sum,
+ *     it does not saturate just because an area is dense (Manhattan has 150+ sheds per survey).
  */
 import { MAYOR_TERM_STARTS } from './config.js';
 import { DAY_MS } from './dates.js';
@@ -54,9 +56,11 @@ export function scoreShed(facts, today) {
   };
 }
 
+const RATING_TOP_N = 10;
+
 export function areaRating(scoredItems) {
-  const sum = scoredItems.reduce((acc, item) => acc + (item.score || 0), 0);
-  return Math.min(100, round(sum / 10, 1));
+  const worst = scoredItems.map((item) => item.score || 0).sort((a, b) => b - a).slice(0, RATING_TOP_N);
+  return round(worst.reduce((acc, s) => acc + s, 0) / RATING_TOP_N, 1);
 }
 
 export function saturationIndex(complaintCount, weather) {

@@ -15,7 +15,8 @@ It is a deliberately over-engineered answer to a question nobody asked. The numb
   - **P: probable puddles.** Locations with repeated 311 flooding or catch-basin complaints, weighted by the last 72 hours of rain minus a drying term from sunshine and temperature.
   - **D: sidewalk defects.** Recent 311 sidewalk-condition reports (collapsed sidewalk, open cellar doors, sign stumps…).
 - **Item files.** Tap anything for its record: years standing, permit renewals, mayors outlasted, owner of record, saturation index.
-- **Walking itineraries.** "ISSUE WALKING ITINERARY" plans a loop from the survey center through the worst things within reach (at most 12 stops, about 2 km).
+- **Area Deterioration Rating.** The mean of the ten worst items' scores (missing slots count as zero), so it rewards both severity and density without saturating in dense blocks.
+- **Walking itineraries.** "ISSUE WALKING ITINERARY" plans a loop from the survey center through the worst things within reach (at most 12 stops, about 2 km). Sheds, puddles and defects take turns, worst first within each kind; items not worth a detour (dry puddles, brand-new sheds) are skipped, and one building never takes more than one stop.
 - **Two voices.** *Municipal paperwork* (forms, case codes, rubber stamps) or *Field guide* (warm, observational narration of the same facts). Switch in the header; the choice is remembered per browser.
 - **Browsing is free.** Panning and zooming never fetch data; "SURVEY THIS AREA" surveys wherever you have moved the map.
 
@@ -79,7 +80,6 @@ The app works without a token, but anonymous requests are rate-limited heavily.
 
 - New York City only.
 - No street routing; itinerary distances are estimates.
-- The Area Deterioration Rating saturates at 100.0 in dense parts of Manhattan.
 - Puddle likelihood is inferred from complaints and weather, not measured.
 
 ## License

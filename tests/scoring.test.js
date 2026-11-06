@@ -28,10 +28,15 @@ test('shed score scales with years', () => {
   assert.equal(s.mayorsOutlasted, 1);
 });
 
-test('areaRating = min(100, sum/10), one decimal', () => {
+test('areaRating = mean of the 10 worst item scores (missing slots count as 0), one decimal', () => {
   assert.equal(areaRating([{ score: 100 }, { score: 46 }]), 14.6);
-  assert.equal(areaRating(Array(20).fill({ score: 100 })), 100);
   assert.equal(areaRating([]), 0);
+  // Only the worst ten count, so piling on more mediocre items cannot push it to 100.
+  const dense = [...Array(10).fill({ score: 60 }), ...Array(150).fill({ score: 40 })];
+  assert.equal(areaRating(dense), 60);
+  // Ten items at the maximum is the only way to reach 100.
+  assert.equal(areaRating(Array(10).fill({ score: 100 })), 100);
+  assert.equal(areaRating([{ score: 33.33 }, { score: 33.33 }, { score: 33.34 }]), 10);
 });
 
 test('saturationIndex without weather is unknown', async () => {
