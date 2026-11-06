@@ -34,7 +34,10 @@ export function createMap(el, center, { onMapTap, onUserMove }) {
   map.on('click', () => onMapTap());
   // Moves made by fitTo() are ours, not the user's.
   let fitting = false;
-  map.on('moveend', () => { if (!fitting) onUserMove(); });
+  // Only real drags and zooms count: a resize (phone rotation, browser bar) also fires moveend.
+  const userMoved = () => { if (!fitting) onUserMove(); };
+  map.on('dragend', userMoved);
+  map.on('zoomend', userMoved);
 
   const items = L.layerGroup().addTo(map);
   const markersById = new Map();
@@ -106,7 +109,7 @@ export function createMap(el, center, { onMapTap, onUserMove }) {
 
     /** Fit the survey circle into the part of the map not covered by the bottom panel. */
     fitTo(c, radiusM, coveredBottomPx = 0) {
-      fitting = true; // not animated, so its moveend fires synchronously inside this call
+      fitting = true; // not animated, so its zoomend fires synchronously inside this call
       map.fitBounds(L.latLng(c.lat, c.lon).toBounds(radiusM * 2), {
         paddingTopLeft: [8, 8],
         paddingBottomRight: [8, 8 + coveredBottomPx],

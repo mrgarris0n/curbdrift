@@ -22,7 +22,7 @@ const items = [...sheds, ...puddles, ...defects];
 const route = { stops: [{ ...shed, legM: 130, atM: 130 }, { ...defects[0], legM: 200, atM: 330 }], distanceM: 512.6, minutes: 6, totalScore: 162.1 };
 
 const MESSAGE_KEYS = ['loading', 'empty', 'unavailable', 'defaultLocation', 'provisional', 'final', 'tapHint', 'resurvey',
-  'routeButton', 'cancelRoute', 'routeEmpty', 'close', 'summaryTitle', 'switchTo'];
+  'routeButton', 'routeShow', 'cancelRoute', 'routeEmpty', 'close', 'summaryTitle', 'switchTo', 'switchToLabel'];
 
 function strings(value, out = []) {
   if (typeof value === 'string') out.push(value);
@@ -111,4 +111,9 @@ test('field guide says "never" and "once" for renewals', () => {
   assert.ok(rows(0).some((r) => r.value === 'never'));
   assert.ok(rows(1).some((r) => r.value === 'once'));
   assert.ok(rows(11).some((r) => r.value === '11 times'));
+});
+
+test('the theme switch has a spoken name that says what it does', () => {
+  assert.match(THEMES.municipal.messages.switchToLabel, /switch to the field guide/i);
+  assert.match(THEMES.field.messages.switchToLabel, /switch to the paperwork/i);
 });

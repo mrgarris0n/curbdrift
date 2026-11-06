@@ -143,5 +143,7 @@ export const field = {
     close: 'Close',
     summaryTitle: 'Around here',
     switchTo: 'Back to the paperwork',
+    switchToLabel: 'Switch to the paperwork style',
+    routeShow: 'Back to the walk',
   },
 };

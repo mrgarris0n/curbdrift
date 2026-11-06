@@ -39,6 +39,7 @@ export function renderHeader(theme, radiusM, onSwitchTheme) {
   $('form-title').textContent = theme.formTitle(radiusM);
   const sw = $('theme-switch');
   sw.textContent = theme.messages.switchTo;
+  sw.setAttribute('aria-label', theme.messages.switchToLabel);
   sw.onclick = onSwitchTheme;
 }
 
@@ -83,7 +84,7 @@ export function renderSummary(theme, state) {
   const stamp = el('span', state.pending ? 'stamp provisional' : 'stamp', state.pending ? theme.messages.provisional : theme.messages.final);
   box.append(stamp);
   if (state.onRoute && !state.pending && state.counts.S + state.counts.P + state.counts.D > 0) {
-    const routeButton = el('button', 'button route-button', theme.messages.routeButton);
+    const routeButton = el('button', 'button route-button', state.routeActive ? theme.messages.routeShow : theme.messages.routeButton);
     routeButton.type = 'button';
     routeButton.addEventListener('click', state.onRoute);
     box.append(routeButton);
@@ -142,6 +143,10 @@ export function showResurvey(theme, onPress) {
 
 export function refreshResurvey(theme) {
   $('resurvey').textContent = theme.messages.resurvey;
+}
+
+export function focusThemeSwitch() {
+  $('theme-switch').focus({ preventScroll: true });
 }
 
 export function isSheetOpen() {

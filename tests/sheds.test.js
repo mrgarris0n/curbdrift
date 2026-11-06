@@ -87,3 +87,8 @@ test('fetchSheds keeps only structures inside the survey circle', async () => {
   const items = await fetchSheds({ lat: 40.7359, lon: -73.9911 }, 400, { fetchImpl, storage: null });
   assert.deepEqual(items.map((x) => x.id.split('|')[0]), ['near']);
 });
+
+test('buildShedParams does not fetch the long job description (keeps responses under the function size cap)', () => {
+  const p = buildShedParams({ lat: 40.7359, lon: -73.9911 }, 400);
+  assert.doesNotMatch(p.$select, /job_description/);
+});

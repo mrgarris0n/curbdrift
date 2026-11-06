@@ -8,14 +8,15 @@ const DATASET = 'rbx6-tga4';
 const WORK_TYPES = ['Sidewalk Shed', 'Supported Scaffold', 'Suspended Scaffold'];
 
 /** @typedef {{kind:'S', id:string, lat:number, lon:number, address:string, workType:string,
- *   chainStart:Date, renewals:number, latestExpiry:Date, owner:string, contractor:string,
- *   description:string}} ShedFacts */
+ *   chainStart:Date, renewals:number, latestExpiry:Date, owner:string, contractor:string}} ShedFacts */
 
+// Only fields the app shows: the free-text job description made dense areas approach the
+// 4.5 MB serverless response cap at the 10000-row limit.
 export function buildShedParams(center, radiusM) {
   const b = bboxAround(center, radiusM);
   const types = WORK_TYPES.map((t) => `'${t}'`).join(',');
   return {
-    $select: 'bin,house_no,street_name,borough,work_type,issued_date,expired_date,permit_status,latitude,longitude,owner_business_name,applicant_business_name,job_description',
+    $select: 'bin,house_no,street_name,borough,work_type,issued_date,expired_date,permit_status,latitude,longitude,owner_business_name,applicant_business_name',
     $where: `work_type in(${types}) AND latitude between ${b.south.toFixed(6)} and ${b.north.toFixed(6)} AND longitude between ${b.west.toFixed(6)} and ${b.east.toFixed(6)}`,
     $limit: '10000',
   };
@@ -83,7 +84,6 @@ export function groupShedPermits(rows, today) {
       latestExpiry: latest.expired,
       owner: clean(r.owner_business_name),
       contractor: clean(r.applicant_business_name),
-      description: clean(r.job_description),
     });
   }
   return items;

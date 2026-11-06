@@ -128,5 +128,7 @@ export const municipal = {
     close: 'CLOSE FILE',
     summaryTitle: 'SURVEY SUMMARY',
     switchTo: 'FIELD GUIDE',
+    switchToLabel: 'Switch to the field guide style',
+    routeShow: 'SHOW ITINERARY',
   },
 };

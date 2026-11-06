@@ -7,7 +7,7 @@ import { fetchWeather, summarizeWeather } from './sources/weather.js';
 import { scoreShed, scorePuddle, scoreDefect, areaRating } from './scoring.js';
 import { THEMES, pickTheme } from './themes/index.js';
 import { createMap } from './map.js';
-import { renderHeader, renderSummary, openSheet, openRoute, closeSheet, isSheetOpen, showNotice, showResurvey, hideResurvey, refreshResurvey } from './ui.js';
+import { renderHeader, renderSummary, openSheet, openRoute, closeSheet, isSheetOpen, showNotice, showResurvey, hideResurvey, refreshResurvey, focusThemeSwitch } from './ui.js';
 import { planRoute } from './route.js';
 
 const THEME_KEY = 'curbdrift.theme';
@@ -98,6 +98,7 @@ async function main() {
   let rerender = () => renderSummary(theme, { counts: { S: 0, P: 0, D: 0 }, rating: 0, pending: true, errors: {} });
   let reopenSheet = null;
   let user = null;
+  let activeRoute = null; // the itinerary drawn on the map, if any
 
   function applyTheme() {
     document.documentElement.dataset.theme = theme.id;
@@ -113,6 +114,7 @@ async function main() {
     refreshResurvey(theme);
     rerender();
     if (sheetWasOpen && reopenSheet) reopenSheet();
+    focusThemeSwitch(); // keep focus on the control the user just used
   }
 
   applyTheme();
@@ -136,6 +138,7 @@ async function main() {
     closeSheet();
     hideResurvey();
     map.setRoute(null); // an itinerary belongs to the survey it was issued for
+    activeRoute = null;
     map.setSurveyArea(at, RADIUS_M);
     if (fit) map.fitTo(at, RADIUS_M, panelHeight());
 
@@ -147,14 +150,22 @@ async function main() {
       });
       const counts = { S: sheds.length, P: puddles.length, D: defects.length };
       // The itinerary loops from the survey center through the items of this survey.
+      // While a walk is drawn, the summary button brings its itinerary back (with the cancel
+      // button) instead of planning a new one, so a dismissed itinerary is never stranded.
+      const cancelRoute = () => { map.setRoute(null); activeRoute = null; rerender(); };
       const onRoute = () => {
-        const route = planRoute(at, items);
-        reopenSheet = () => openRoute(theme, route, () => map.setRoute(null));
+        const fresh = !activeRoute;
+        if (fresh) activeRoute = planRoute(at, items);
+        const route = activeRoute;
+        reopenSheet = () => openRoute(theme, route, cancelRoute);
         reopenSheet();
+        if (!fresh) return;
         // After the sheet is open, so the view fits the loop above it.
         map.setRoute(route.stops.length ? [at, ...route.stops, at] : null, document.getElementById('sheet').offsetHeight);
+        if (!route.stops.length) activeRoute = null;
+        rerender();
       };
-      renderSummary(theme, { counts, rating: areaRating(items), pending, errors, onRoute });
+      renderSummary(theme, { counts, rating: areaRating(items), pending, errors, onRoute, routeActive: Boolean(activeRoute) });
     };
     const show = (result, pending) => {
       rerender = () => render(result, pending);
