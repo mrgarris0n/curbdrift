@@ -1,7 +1,7 @@
 // Decay route: a walking loop from a start point through the most deteriorated items that fit
-// a distance budget. A small orienteering problem, solved with greedy cheapest insertion:
-// repeatedly insert the item with the best (score ÷ extra meters), at the position in the loop
-// where it adds the least walking, until nothing else fits.
+// a distance budget and a stop cap. Items are considered worst-first; each is inserted where it
+// adds the least walking, if the loop still fits the budget. (Optimizing "decay per meter"
+// instead fills the capped stops with mediocre items that happen to be close.)
 //
 // Distances are straight lines × WALK_FACTOR to approximate the street grid (no routing service).
 import { distanceM } from './geo.js';
@@ -26,23 +26,22 @@ const walk = (a, b) => distanceM(a, b) * WALK_FACTOR;
 export function planRoute(start, items, budgetM = DEFAULT_BUDGET_M) {
   const path = [start, start]; // closed loop: start → … → start
   let total = 0;
-  const remaining = items.filter((it) => it.score > 0 && Number.isFinite(it.lat) && Number.isFinite(it.lon));
+  const candidates = items
+    .filter((it) => it.score > 0 && Number.isFinite(it.lat) && Number.isFinite(it.lon))
+    .map((it) => ({ it, fromStart: walk(start, it) }))
+    .sort((a, b) => b.it.score - a.it.score || a.fromStart - b.fromStart) // worst first; ties: nearer
+    .map((c) => c.it);
 
-  while (path.length - 2 < MAX_STOPS) {
+  for (const it of candidates) {
+    if (path.length - 2 >= MAX_STOPS) break;
     let best = null;
-    for (let k = 0; k < remaining.length; k++) {
-      const it = remaining[k];
-      for (let i = 0; i < path.length - 1; i++) {
-        const delta = walk(path[i], it) + walk(it, path[i + 1]) - walk(path[i], path[i + 1]);
-        if (total + delta > budgetM) continue;
-        const ratio = it.score / Math.max(delta, 1);
-        if (!best || ratio > best.ratio) best = { k, i, delta, ratio };
-      }
+    for (let i = 0; i < path.length - 1; i++) {
+      const delta = walk(path[i], it) + walk(it, path[i + 1]) - walk(path[i], path[i + 1]);
+      if (!best || delta < best.delta) best = { i, delta };
     }
-    if (!best) break;
-    path.splice(best.i + 1, 0, remaining[best.k]);
+    if (total + best.delta > budgetM) continue; // out of reach; a lesser item may still fit
+    path.splice(best.i + 1, 0, it);
     total += best.delta;
-    remaining.splice(best.k, 1);
   }
 
   const stops = [];

@@ -76,3 +76,12 @@ test('at most MAX_STOPS stops, keeping the best decay per meter', async () => {
   assert.equal(r.stops.length, 12);
   assert.ok(r.stops.some((s) => s.id === 'i7'), 'the standout item is kept');
 });
+
+test('when the stop cap binds, the worst reachable items win over nearer lesser ones', () => {
+  const items = [];
+  for (let i = 0; i < 30; i++) items.push(item(`low${i}`, 10, 30 + i * 3, 20)); // trivial, right next to start
+  for (let i = 0; i < 12; i++) items.push(item(`bad${i}`, 80, 250 + i * 10, -150)); // worse, a short walk away
+  const r = planRoute(START, items, 2000);
+  assert.equal(r.stops.length, 12);
+  assert.ok(r.stops.every((s) => s.id.startsWith('bad')), r.stops.map((s) => s.id).join(','));
+});
