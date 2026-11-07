@@ -27,3 +27,7 @@ for (const theme of Object.values(THEMES)) {
     for (const s of all) assert.doesNotMatch(s, /\p{Extended_Pictographic}/u, s);
   });
 }
+
+test('credits include the walking router', () => {
+  assert.ok(CREDITS.sources.some((s) => s.url.includes('openrouteservice.org')));
+});

@@ -100,8 +100,9 @@ export function renderSummary(theme, state) {
 }
 
 // Show the bottom sheet (in place of the summary) with a title, one action button and content.
-function showSheet(titleText, buttonText, onButton, ...content) {
+function showSheet(titleText, buttonText, onButton, content, { focus = true } = {}) {
   const sheet = $('sheet');
+  const hadFocus = sheet.contains(document.activeElement); // re-rendering must not drop it
   sheet.replaceChildren();
   const head = el('div', 'sheet-head');
   const button = el('button', 'button', buttonText);
@@ -112,11 +113,11 @@ function showSheet(titleText, buttonText, onButton, ...content) {
   sheet.hidden = false;
   $('summary').hidden = true;
   syncPanelHeight();
-  button.focus({ preventScroll: true });
+  if (focus || hadFocus) button.focus({ preventScroll: true });
 }
 
 export function openSheet(theme, item, onClose) {
-  showSheet(theme.itemTitle(item), theme.messages.close, onClose, rowsList(theme.recordRows(item)), el('span', 'stamp', theme.stamp(item)));
+  showSheet(theme.itemTitle(item), theme.messages.close, onClose, [rowsList(theme.recordRows(item)), el('span', 'stamp', theme.stamp(item))]);
 }
 
 /** The walking itinerary file. Its button cancels the itinerary. */
@@ -147,19 +148,19 @@ export function openCredits(theme, credits) {
     li.append(link(s.name, s.url), el('span', 'credits-provider', s.provider));
     sources.append(li);
   }
-  showSheet(theme.credits.title, theme.messages.close, null,
+  showSheet(theme.credits.title, theme.messages.close, null, [
     section(c.developer, para(credits.developer)),
     section(c.code, para(link(credits.repo.replace(/^https:\/\//, ''), credits.repo))),
     section(c.sources, sources),
     section(c.builtWith, para(link(credits.builtWith.name, credits.builtWith.url))),
-    el('p', 'stamp credits-inspiration', c.inspiredBy(credits.inspiration)));
+    el('p', 'stamp credits-inspiration', c.inspiredBy(credits.inspiration))]);
 }
 
-export function openRoute(theme, route, onCancel) {
+export function openRoute(theme, route, onCancel, { focus = true } = {}) {
   const content = route.stops.length
     ? [rowsList(theme.routeSummaryRows(route)), el('hr', 'rule'), rowsList(theme.routeStopRows(route)), el('span', 'stamp', theme.routeStamp)]
     : [el('p', 'status-line', theme.messages.routeEmpty)];
-  showSheet(theme.routeTitle, theme.messages.cancelRoute, onCancel, ...content);
+  showSheet(theme.routeTitle, theme.messages.cancelRoute, onCancel, content, { focus });
 }
 
 export function closeSheet() {

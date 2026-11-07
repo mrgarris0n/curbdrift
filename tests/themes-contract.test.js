@@ -117,3 +117,15 @@ test('the theme switch has a spoken name that says what it does', () => {
   assert.match(THEMES.municipal.messages.switchToLabel, /switch to the field guide/i);
   assert.match(THEMES.field.messages.switchToLabel, /switch to the paperwork/i);
 });
+
+test('itinerary method row tells estimate from real street route, in both themes', () => {
+  const streets = { ...route, method: 'streets' };
+  for (const theme of Object.values(THEMES)) {
+    const est = strings(theme.routeSummaryRows({ ...route, method: 'estimate' })).join(' ');
+    const real = strings(theme.routeSummaryRows(streets)).join(' ');
+    assert.ok(est.includes('1.3'), `${theme.id} estimate states the 1.3 allowance`);
+    assert.ok(!real.includes('1.3'), `${theme.id} street route does not claim the allowance`);
+    assert.match(real, /street/i, `${theme.id} street route says so`);
+    assert.match(real, /openrouteservice/i, `${theme.id} credits the router`);
+  }
+});

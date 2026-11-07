@@ -107,3 +107,4 @@
 [data-theme="field"] .credits-section p, [data-theme="field"] .credits-sources a { font-size: 0.98rem; }
 [data-theme="field"] .link-button { font-size: 0.9rem; font-style: italic; }
 [data-theme="field"] .credits-provider { margin-top: 0.15rem; }
+[data-theme="field"] .route-line.streets { stroke-opacity: 0.85; }

@@ -8,6 +8,7 @@ export const CREDITS = Object.freeze({
     { name: '311 Service Requests', provider: 'NYC 311, via NYC Open Data', url: 'https://data.cityofnewyork.us/d/erm2-nwe9' },
     { name: 'Weather forecast and history', provider: 'Open-Meteo', url: 'https://open-meteo.com/' },
     { name: 'Map data and tiles', provider: '© OpenStreetMap contributors', url: 'https://www.openstreetmap.org/copyright' },
+    { name: 'Walking routes', provider: '© openrouteservice.org by HeiGIT', url: 'https://openrouteservice.org/' },
   ]),
   builtWith: Object.freeze({ name: 'Leaflet', url: 'https://leafletjs.com/' }),
 });

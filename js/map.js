@@ -93,15 +93,19 @@ export function createMap(el, center, { onMapTap, onUserMove }) {
 
     /**
      * Draw the itinerary loop through the given points (or clear it with null). Markers not on
-     * the route are dimmed, and the view fits the loop above the bottom panel.
+     * the route are dimmed, and (unless fit is false) the view fits the loop above the panel.
      */
-    setRoute(points, coveredBottomPx = 0) {
+    setRoute(points, coveredBottomPx = 0, { line = null, fit = true } = {}) {
       routeLine?.remove();
       routeLine = null;
       routeIds = points ? new Set(points.map((pt) => pt.id).filter(Boolean)) : null;
       for (const [id, m] of markersById) m.getElement()?.classList.toggle('off-route', Boolean(routeIds) && !routeIds.has(id));
       if (!points) return;
-      routeLine = L.polyline(points.map((pt) => [pt.lat, pt.lon]), { className: 'route-line', weight: 3, dashArray: '6 6', interactive: false }).addTo(map);
+      // A real street path (line of [lat, lon]) is drawn solid; the straight-line estimate dashed.
+      routeLine = line
+        ? L.polyline(line, { className: 'route-line streets', weight: 4, interactive: false }).addTo(map)
+        : L.polyline(points.map((pt) => [pt.lat, pt.lon]), { className: 'route-line', weight: 3, dashArray: '6 6', interactive: false }).addTo(map);
+      if (!fit) return;
       fitting = true;
       map.fitBounds(routeLine.getBounds(), { paddingTopLeft: [24, 24], paddingBottomRight: [24, 24 + coveredBottomPx], animate: false, maxZoom: 18 });
       fitting = false;

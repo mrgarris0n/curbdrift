@@ -9,7 +9,8 @@ import { THEMES, pickTheme } from './themes/index.js';
 import { createMap } from './map.js';
 import { CREDITS } from './credits.js';
 import { renderHeader, renderSummary, openSheet, openRoute, openCredits, closeSheet, isSheetOpen, showNotice, showResurvey, hideResurvey, refreshResurvey, focusThemeSwitch } from './ui.js';
-import { planRoute } from './route.js';
+import { planRoute, withStreetRoute } from './route.js';
+import { fetchWalkingRoute } from './sources/walking.js';
 
 const THEME_KEY = 'curbdrift.theme';
 
@@ -167,17 +168,28 @@ async function main() {
       // While a walk is drawn, the summary button brings its itinerary back (with the cancel
       // button) instead of planning a new one, so a dismissed itinerary is never stranded.
       const cancelRoute = () => { map.setRoute(null); activeRoute = null; rerender(); };
+      const showRoute = (opts) => openRoute(theme, activeRoute, cancelRoute, opts);
       const onRoute = () => {
         const fresh = !activeRoute;
         if (fresh) activeRoute = planRoute(at, items);
-        const route = activeRoute;
-        reopenSheet = () => openRoute(theme, route, cancelRoute);
-        reopenSheet();
+        const planned = activeRoute;
+        reopenSheet = showRoute;
+        showRoute();
         if (!fresh) return;
-        // After the sheet is open, so the view fits the loop above it.
-        map.setRoute(route.stops.length ? [at, ...route.stops, at] : null, document.getElementById('sheet').offsetHeight);
-        if (!route.stops.length) activeRoute = null;
+        if (!planned.stops.length) { activeRoute = null; return; }
+        // After the sheet is open, so the view fits the loop above it. Straight-line estimate first…
+        const loop = [at, ...planned.stops, at];
+        map.setRoute(loop, document.getElementById('sheet').offsetHeight);
         rerender();
+        // …then the same walk along real streets, if the router answers. Otherwise the estimate stays.
+        fetchWalkingRoute(loop.map(({ lat, lon }) => ({ lat, lon })), { signal: inFlight?.signal })
+          .then((walking) => {
+            if (activeRoute !== planned) return; // cancelled or replaced meanwhile
+            activeRoute = withStreetRoute(planned, walking);
+            map.setRoute(loop, 0, { line: activeRoute.path, fit: false });
+            if (isSheetOpen() && reopenSheet === showRoute) showRoute({ focus: false });
+          })
+          .catch((err) => console.warn('walking route', err));
       };
       renderSummary(theme, { counts, rating: areaRating(items), pending, errors, onRoute, routeActive: Boolean(activeRoute), onCredits });
     };

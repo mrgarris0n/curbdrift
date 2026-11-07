@@ -108,7 +108,7 @@ export const field = {
       { label: 'Roughly how far', value: `${Math.round(route.distanceM)} m` },
       { label: 'Roughly how long', value: `${route.minutes} min` },
       { label: 'Decay along the way', value: route.totalScore.toFixed(1) },
-      { label: 'How we measured', value: 'As the crow flies, times 1.3 for the corners' },
+      { label: 'How we measured', value: route.method === 'streets' ? 'Along the actual streets (thanks, openrouteservice)' : 'As the crow flies, times 1.3 for the corners' },
     ];
   },
 

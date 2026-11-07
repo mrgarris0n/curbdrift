@@ -77,9 +77,32 @@ export function planRoute(start, items, budgetM = DEFAULT_BUDGET_M) {
     stops.push({ ...path[i], legM, atM });
   }
   return {
+    method: 'estimate', // straight lines × WALK_FACTOR; see withStreetRoute for the real thing
     stops,
     distanceM: total,
     minutes: Math.round(total / WALK_M_PER_MIN),
     totalScore: stops.reduce((sum, s) => sum + s.score, 0),
+  };
+}
+
+/**
+ * The same walk (stops and order unchanged) measured along real streets: legs, total, time and
+ * the path to draw come from a walking router. `walking.legs` has one leg per stop plus the return.
+ */
+export function withStreetRoute(planned, walking) {
+  if (walking.legs.length !== planned.stops.length + 1) throw new Error('walking route legs do not match the stops');
+  let atM = 0;
+  const stops = planned.stops.map((stop, i) => {
+    const legM = walking.legs[i].distanceM;
+    atM += legM;
+    return { ...stop, legM, atM };
+  });
+  return {
+    ...planned,
+    method: 'streets',
+    stops,
+    distanceM: walking.distanceM,
+    minutes: Math.round(walking.durationS / 60),
+    path: walking.path,
   };
 }

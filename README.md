@@ -16,14 +16,14 @@ It is a deliberately over-engineered answer to a question nobody asked. The numb
   - **D: sidewalk defects.** Recent 311 sidewalk-condition reports (collapsed sidewalk, open cellar doors, sign stumps…).
 - **Item files.** Tap anything for its record: years standing, permit renewals, mayors outlasted, owner of record, saturation index.
 - **Area Deterioration Rating.** The mean of the ten worst items' scores (missing slots count as zero), so it rewards both severity and density without saturating in dense blocks.
-- **Walking itineraries.** "ISSUE WALKING ITINERARY" plans a loop from the survey center through the worst things within reach (at most 12 stops, about 2 km). Sheds, puddles and defects take turns, worst first within each kind; items not worth a detour (dry puddles, brand-new sheds) are skipped, and one building never takes more than one stop.
+- **Walking itineraries.** "ISSUE WALKING ITINERARY" plans a loop from the survey center through the worst things within reach (at most 12 stops, about 2 km). Sheds, puddles and defects take turns, worst first within each kind; items not worth a detour (dry puddles, brand-new sheds) are skipped, and one building never takes more than one stop. The walk is then routed along real streets by [openrouteservice](https://openrouteservice.org/), with real distances and times; if the router is unavailable, the itinerary falls back to a straight-line estimate and says so.
 - **Two voices.** *Municipal paperwork* (forms, case codes, rubber stamps) or *Field guide* (warm, observational narration of the same facts). Switch in the header; the choice is remembered per browser.
 - **Browsing is free.** Panning and zooming never fetch data; "SURVEY THIS AREA" surveys wherever you have moved the map.
 
 ## Honesty rules
 
 - Every number shown comes from an API or from a formula documented in [`js/scoring.js`](js/scoring.js) or [`js/route.js`](js/route.js). The precision is fake; the facts are not.
-- Walking distances are straight lines × 1.3 (an allowance for the street grid), and the itinerary says so. There is no street routing.
+- Itinerary distances and times come from a real street route. When the router is unavailable, the fallback estimate (straight lines × 1.3, an allowance for the street grid) is labelled as such.
 - Permit history only goes back to 2017 (when DOB NOW began), so "in continuous service since" never predates that.
 
 ## Data sources
@@ -36,6 +36,7 @@ All are free and public. NYC Open Data is reached through this app's own proxy; 
 | Flooding, catch basins, sidewalk defects | NYC Open Data — [311 Service Requests](https://data.cityofnewyork.us/d/erm2-nwe9) (`erm2-nwe9`) |
 | Rain, sunshine, temperature | [Open-Meteo](https://open-meteo.com/) forecast API (past 72 hours) |
 | Map tiles | © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors |
+| Walking routes | © [openrouteservice.org](https://openrouteservice.org/) by HeiGIT (foot-walking profile) |
 
 ## How it works
 
@@ -50,9 +51,10 @@ js/route.js             the itinerary planner
 js/themes/*.js          every user-visible word, one module per theme
 js/map.js, js/ui.js     Leaflet map and DOM rendering
 api/socrata.js          proxy to NYC Open Data that adds the app token server-side
+api/route.js            proxy to openrouteservice that adds the routing key server-side
 ```
 
-The browser calls `/api/socrata` rather than NYC Open Data directly, so the Socrata app token stays on the server. The proxy only accepts the two datasets and the query fields the app uses, caps the row count, and caches successful answers at the edge for 5 minutes.
+The browser calls `/api/socrata` and `/api/route` rather than the upstream services, so the Socrata app token and the openrouteservice key stay on the server. `/api/route` only routes short walks inside New York City. The proxy only accepts the two datasets and the query fields the app uses, caps the row count, and caches successful answers at the edge for 5 minutes.
 
 ## Running it
 
@@ -68,18 +70,19 @@ A plain static file server will show the page but cannot run `/api/socrata`, so 
 ### Deploying your own
 
 1. Get a free Socrata app token from NYC Open Data (developer settings in your profile).
-2. Set it as an environment variable for your Vercel project:
+2. Get a free [openrouteservice](https://openrouteservice.org/) API key.
+3. Set both as environment variables for your Vercel project:
    ```bash
    vercel env add SOCRATA_APP_TOKEN --environment production
+   vercel env add ORS_API_KEY --environment production
    ```
-3. Deploy with `vercel deploy --prod`. `vercel.json` copies the site into `dist/`, and `api/` is deployed as a function.
+4. Deploy with `vercel deploy --prod`. `vercel.json` copies the site into `dist/`, and `api/` is deployed as a function.
 
-The app works without a token, but anonymous requests are rate-limited heavily.
+The app works without either: without the Socrata token anonymous requests are rate-limited heavily, and without the routing key itineraries use the straight-line estimate.
 
 ## Limitations
 
 - New York City only.
-- No street routing; itinerary distances are estimates.
 - Puddle likelihood is inferred from complaints and weather, not measured.
 
 ## License

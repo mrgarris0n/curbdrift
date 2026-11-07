@@ -90,10 +90,10 @@ export const municipal = {
   routeSummaryRows(route) {
     return [
       { label: 'Stops designated', value: String(route.stops.length) },
-      { label: 'Total distance (estimated)', value: `${Math.round(route.distanceM)} m` },
+      { label: route.method === 'streets' ? 'Total distance (street route)' : 'Total distance (estimated)', value: `${Math.round(route.distanceM)} m` },
       { label: 'Estimated duration', value: `${route.minutes} min` },
       { label: 'Cumulative deterioration', value: route.totalScore.toFixed(1) },
-      { label: 'Method', value: 'STRAIGHT LINE × 1.3 (STREET GRID ALLOWANCE)' },
+      { label: 'Method', value: route.method === 'streets' ? 'PEDESTRIAN STREET ROUTE (OPENROUTESERVICE)' : 'STRAIGHT LINE × 1.3 (STREET GRID ALLOWANCE)' },
     ];
   },
 
