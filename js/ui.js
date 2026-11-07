@@ -129,7 +129,7 @@ function link(text, href) {
   return a;
 }
 
-/** Credits: developer, source code, every data source, and the inspiration. */
+/** Credits: developer, source code, every data source, and the inspirations. */
 export function openCredits(theme, credits) {
   const c = theme.credits;
   const para = (...children) => {
@@ -153,7 +153,7 @@ export function openCredits(theme, credits) {
     section(c.code, para(link(credits.repo.replace(/^https:\/\//, ''), credits.repo))),
     section(c.sources, sources),
     section(c.builtWith, para(link(credits.builtWith.name, credits.builtWith.url))),
-    el('p', 'stamp credits-inspiration', c.inspiredBy(credits.inspiration)),
+    el('p', 'stamp credits-inspiration', c.inspiredBy(credits.inspirations)),
     el('p', 'credits-disclaimer', credits.disclaimer)]);
 }
 

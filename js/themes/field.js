@@ -2,6 +2,8 @@
 // theme files away. Sincere, never winking; every number is still the real one.
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+// ['A', 'B', 'C'] → 'A, B and C'.
+const andList = (names) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
 const monthYear = (d) => `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 const day = (d) => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 const orUnknown = (s) => (s ? s : 'Nobody wrote it down');
@@ -135,7 +137,7 @@ export const field = {
     code: 'The code',
     sources: 'Where the facts come from',
     builtWith: 'The map is drawn with',
-    inspiredBy: (name) => `Inspired by the works of ${name}, who taught us to look at this stuff.`,
+    inspiredBy: (names) => `Inspired by the works of ${andList(names)}, who taught us to look at this stuff.`,
   },
 
   messages: {

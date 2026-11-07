@@ -2,6 +2,8 @@
 // Data and scoring modules return facts and keys; this module turns them into a form.
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+// ['A', 'B', 'C'] → 'A, B and C'.
+const andList = (names) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
 const monthYear = (d) => `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 const day = (d) => `${String(d.getUTCDate()).padStart(2, '0')} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 const orNone = (s) => (s ? s : 'NOT ON FILE');
@@ -120,7 +122,7 @@ export const municipal = {
     code: 'Source code (public record)',
     sources: 'Records consulted',
     builtWith: 'Cartographic apparatus',
-    inspiredBy: (name) => `Inspired by the works of ${name}.`,
+    inspiredBy: (names) => `Inspired by the works of ${andList(names)}.`,
   },
 
   messages: {

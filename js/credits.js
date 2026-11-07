@@ -2,7 +2,7 @@
 export const CREDITS = Object.freeze({
   developer: 'Gergely Karácsonyi',
   repo: 'https://github.com/mrgarris0n/curbdrift',
-  inspiration: 'John Wilson',
+  inspirations: Object.freeze(['John Wilson', 'Nathan Fielder']),
   sources: Object.freeze([
     { name: 'DOB NOW: Build – Approved Permits', provider: 'NYC Department of Buildings, via NYC Open Data', url: 'https://data.cityofnewyork.us/d/rbx6-tga4' },
     { name: '311 Service Requests', provider: 'NYC 311, via NYC Open Data', url: 'https://data.cityofnewyork.us/d/erm2-nwe9' },
