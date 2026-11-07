@@ -55,7 +55,8 @@ export async function handleRoute(request, { key = process.env.ORS_API_KEY ?? ''
     upstream = await fetchImpl(UPSTREAM, {
       method: 'POST',
       headers: { Authorization: key, 'content-type': 'application/json', accept: 'application/geo+json, application/json' },
-      body: JSON.stringify({ coordinates: points.map((p) => [p.lon, p.lat]), instructions: false }),
+      // Instructions stay on (the default): the per-leg segments we need come with them.
+      body: JSON.stringify({ coordinates: points.map((p) => [p.lon, p.lat]) }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch {
@@ -63,13 +64,20 @@ export async function handleRoute(request, { key = process.env.ORS_API_KEY ?? ''
   }
   if (!upstream.ok) return json({ message: 'routing service refused' }, upstream.status);
 
-  let route;
+  let answer = null;
   try {
-    route = normalize(await upstream.json());
+    answer = await upstream.json();
   } catch {
-    route = null;
+    // unreadable; reported below
   }
-  return route ? json(route, 200) : json({ message: 'unexpected routing answer' }, 502);
+  const route = normalize(answer);
+  if (!route) {
+    // Structure only (key names), never values: enough to diagnose a changed API shape.
+    const props = answer?.features?.[0]?.properties;
+    console.error('route: unexpected answer shape', { top: Object.keys(answer ?? {}), properties: Object.keys(props ?? {}) });
+    return json({ message: 'unexpected routing answer' }, 502);
+  }
+  return json(route, 200);
 }
 
 export function POST(request) {

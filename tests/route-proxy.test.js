@@ -36,6 +36,8 @@ test('routes a walk through OpenRouteService with the key added server-side', as
   assert.equal(u.calls[0].init.headers.Authorization, 'secret-key');
   const sent = JSON.parse(u.calls[0].init.body);
   assert.deepEqual(sent.coordinates, [[-73.9911, 40.7359], [-73.9925, 40.7372], [-73.9911, 40.7359]]); // [lon, lat]
+  // Per-leg segments only come back with instructions on (the default), so never switch them off.
+  assert.notEqual(sent.instructions, false);
   const body = await res.json();
   assert.deepEqual(body, {
     distanceM: 412.3,
