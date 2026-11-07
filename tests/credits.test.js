@@ -28,6 +28,10 @@ for (const theme of Object.values(THEMES)) {
   });
 }
 
+test('credits disclaim any affiliation with or endorsement by the City of New York', () => {
+  assert.match(CREDITS.disclaimer, /not affiliated with, endorsed by, or sponsored by the City of New York/);
+});
+
 test('credits include the walking router', () => {
   assert.ok(CREDITS.sources.some((s) => s.url.includes('openrouteservice.org')));
 });

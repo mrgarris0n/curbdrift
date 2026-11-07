@@ -96,6 +96,10 @@ The app works without either: without the Socrata token anonymous requests are r
 - New York City only.
 - Puddle likelihood is inferred from complaints and weather, not measured.
 
+## Disclaimer
+
+curbdrift is an independent project. It is not affiliated with, endorsed by, or sponsored by the City of New York or any of its agencies. City data is shown as published and may be incomplete or out of date.
+
 ## License
 
 [MIT](LICENSE)

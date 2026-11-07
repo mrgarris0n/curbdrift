@@ -153,7 +153,8 @@ export function openCredits(theme, credits) {
     section(c.code, para(link(credits.repo.replace(/^https:\/\//, ''), credits.repo))),
     section(c.sources, sources),
     section(c.builtWith, para(link(credits.builtWith.name, credits.builtWith.url))),
-    el('p', 'stamp credits-inspiration', c.inspiredBy(credits.inspiration))]);
+    el('p', 'stamp credits-inspiration', c.inspiredBy(credits.inspiration)),
+    el('p', 'credits-disclaimer', credits.disclaimer)]);
 }
 
 export function openRoute(theme, route, onCancel, { focus = true } = {}) {

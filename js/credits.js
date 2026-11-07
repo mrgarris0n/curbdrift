@@ -11,4 +11,6 @@ export const CREDITS = Object.freeze({
     { name: 'Walking routes', provider: '© openrouteservice.org by HeiGIT', url: 'https://openrouteservice.org/' },
   ]),
   builtWith: Object.freeze({ name: 'Leaflet', url: 'https://leafletjs.com/' }),
+  // A legal statement, so it is the same plain text in every theme.
+  disclaimer: 'curbdrift is an independent project. It is not affiliated with, endorsed by, or sponsored by the City of New York or any of its agencies. City data is shown as published and may be incomplete or out of date.',
 });
