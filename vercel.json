@@ -3,5 +3,6 @@
   "framework": null,
   "installCommand": "",
   "buildCommand": "node scripts/build.mjs",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "crons": [{ "path": "/api/refresh-sheds", "schedule": "0 9 * * *" }]
 }

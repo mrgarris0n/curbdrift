@@ -42,13 +42,8 @@ function writeCache(storage, key, now, rows) {
   }
 }
 
-/** Query a NYC Open Data (Socrata) dataset. Resolves to the row array. */
-export async function socrataQuery(datasetId, params, { fetchImpl = globalThis.fetch, storage = defaultStorage(), now = Date.now, timeoutMs = REQUEST_TIMEOUT_MS, signal } = {}) {
-  const url = `${PROXY}?${new URLSearchParams({ dataset: datasetId, ...params })}`;
-  const t = now();
-  const cached = readCache(storage, url, t);
-  if (cached) return cached;
-
+/** GET a JSON document from the records office; every failure becomes RecordsUnavailableError. */
+export async function getRecordsJson(url, { fetchImpl = globalThis.fetch, timeoutMs = REQUEST_TIMEOUT_MS, signal } = {}) {
   let res;
   try {
     res = await fetchImpl(url, { signal: requestSignal(timeoutMs, signal) });
@@ -57,13 +52,22 @@ export async function socrataQuery(datasetId, params, { fetchImpl = globalThis.f
   }
   if (!res.ok) throw new RecordsUnavailableError(`HTTP ${res.status}`, res.status);
 
-  let rows;
   try {
-    rows = await res.json();
+    return await res.json();
   } catch {
     throw new RecordsUnavailableError('unreadable response', res.status);
   }
-  if (!Array.isArray(rows)) throw new RecordsUnavailableError('unexpected response shape', res.status);
+}
+
+/** Query a NYC Open Data (Socrata) dataset. Resolves to the row array. */
+export async function socrataQuery(datasetId, params, { storage = defaultStorage(), now = Date.now, ...opts } = {}) {
+  const url = `${PROXY}?${new URLSearchParams({ dataset: datasetId, ...params })}`;
+  const t = now();
+  const cached = readCache(storage, url, t);
+  if (cached) return cached;
+
+  const rows = await getRecordsJson(url, opts);
+  if (!Array.isArray(rows)) throw new RecordsUnavailableError('unexpected response shape');
 
   writeCache(storage, url, t, rows);
   return rows;

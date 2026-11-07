@@ -1,10 +1,11 @@
 // Vercel Function: GET /api/socrata?dataset=<id>&$select=…&$where=…&$limit=…
 // Forwards the app's NYC Open Data queries and adds the Socrata app token server-side,
-// so the token never reaches the browser. Deliberately narrow: only the two datasets and
-// the query parameters the app uses, so this is not a general-purpose open proxy.
+// so the token never reaches the browser. Deliberately narrow: only the dataset and the
+// query parameters the app uses, so this is not a general-purpose open proxy. (Sheds come
+// from the static snapshot built at deploy time, not through here.)
 
 const UPSTREAM = 'https://data.cityofnewyork.us/resource/';
-const DATASETS = new Set(['rbx6-tga4', 'erm2-nwe9']); // DOB NOW permits, 311 requests
+const DATASETS = new Set(['erm2-nwe9']); // 311 requests
 const PARAMS = ['$select', '$where', '$limit'];
 const MAX_LIMIT = 10000;
 const TIMEOUT_MS = 25000;

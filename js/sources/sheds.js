@@ -1,24 +1,26 @@
-import { socrataQuery } from './socrata.js';
-import { bboxAround, distanceM } from '../geo.js';
+import { getRecordsJson, RecordsUnavailableError } from './socrata.js';
+import { distanceM } from '../geo.js';
 import { SHED_GAP_DAYS } from '../config.js';
-import { parseApiDate, DAY_MS } from '../dates.js';
+import { parseApiDate, isoDay, DAY_MS } from '../dates.js';
 
 // DOB NOW: Build – Approved Permits. (Not 8586-3zfm, which is school construction.)
-const DATASET = 'rbx6-tga4';
+export const SHED_DATASET = 'rbx6-tga4';
 const WORK_TYPES = ['Sidewalk Shed', 'Supported Scaffold', 'Suspended Scaffold'];
+
+// The permits change once a day, so the deploy build turns them into one citywide snapshot
+// (scripts/shed-snapshot.mjs) and the browser reads that static file instead of the API.
+export const SNAPSHOT_URL = '/data/sheds.json';
 
 /** @typedef {{kind:'S', id:string, lat:number, lon:number, address:string, workType:string,
  *   chainStart:Date, renewals:number, latestExpiry:Date, owner:string, contractor:string}} ShedFacts */
 
-// Only fields the app shows: the free-text job description made dense areas approach the
-// 4.5 MB serverless response cap at the 10000-row limit.
-export function buildShedParams(center, radiusM) {
-  const b = bboxAround(center, radiusM);
+/** The citywide permit query behind the snapshot (paged by the caller). Only fields the app shows. */
+export function snapshotQuery() {
   const types = WORK_TYPES.map((t) => `'${t}'`).join(',');
   return {
-    $select: 'bin,job_filing_number,house_no,street_name,borough,work_type,issued_date,expired_date,permit_status,latitude,longitude,owner_business_name,applicant_business_name',
-    $where: `work_type in(${types}) AND latitude between ${b.south.toFixed(6)} and ${b.north.toFixed(6)} AND longitude between ${b.west.toFixed(6)} and ${b.east.toFixed(6)}`,
-    $limit: '10000',
+    $select: 'bin,job_filing_number,house_no,street_name,work_type,issued_date,expired_date,permit_status,latitude,longitude,owner_business_name,applicant_business_name',
+    $where: `work_type in(${types})`,
+    $order: ':id',
   };
 }
 
@@ -97,9 +99,34 @@ export function groupShedPermits(rows, today) {
   return items;
 }
 
+/** Permit rows → the JSON snapshot the browser reads. Dates become UTC days. */
+export function toSnapshot(rows, now) {
+  const sheds = groupShedPermits(rows, parseApiDate(isoDay(now))).map(({ kind, chainStart, latestExpiry, ...rest }) => ({
+    ...rest,
+    chainStart: isoDay(chainStart),
+    latestExpiry: isoDay(latestExpiry),
+  }));
+  return { generatedAt: now.toISOString(), sheds };
+}
+
+/** Snapshot → the structures inside the survey circle still permitted on `today`. @returns {ShedFacts[]} */
+export function shedsFromSnapshot(snapshot, center, radiusM, today) {
+  if (!Array.isArray(snapshot?.sheds)) throw new RecordsUnavailableError('unexpected snapshot shape');
+  const items = [];
+  for (const s of snapshot.sheds) {
+    const chainStart = parseApiDate(s.chainStart);
+    const latestExpiry = parseApiDate(s.latestExpiry);
+    // The snapshot can be up to a day old; drop permits that ran out since it was made.
+    if (!chainStart || !latestExpiry || latestExpiry < today) continue;
+    if (distanceM(center, s) > radiusM) continue;
+    items.push({ ...s, kind: 'S', chainStart, latestExpiry });
+  }
+  return items;
+}
+
 /** @returns {Promise<ShedFacts[]>} */
-export async function fetchSheds(center, radiusM, opts) {
-  const rows = await socrataQuery(DATASET, buildShedParams(center, radiusM), opts);
-  // The query is a bounding box; trim its corners to the survey circle.
-  return groupShedPermits(rows, new Date()).filter((s) => distanceM(center, s) <= radiusM);
+export async function fetchSheds(center, radiusM, { fetchImpl, timeoutMs, signal } = {}) {
+  const snapshot = await getRecordsJson(SNAPSHOT_URL, { fetchImpl, timeoutMs, signal });
+  // Expiry is a calendar day: a permit expiring today still counts today.
+  return shedsFromSnapshot(snapshot, center, radiusM, parseApiDate(isoDay(new Date())));
 }

@@ -40,7 +40,7 @@ All are free and public. NYC Open Data is reached through this app's own proxy; 
 
 ## How it works
 
-A static site (plain HTML, CSS and ES modules, no framework, no build step beyond copying files) plus one serverless function.
+A static site (plain HTML, CSS and ES modules, no framework) plus two small serverless functions and a daily cron. The build copies the files and adds a citywide shed snapshot.
 
 ```
 index.html, css/        page and the two themes (scoped by [data-theme])
@@ -52,20 +52,25 @@ js/themes/*.js          every user-visible word, one module per theme
 js/map.js, js/ui.js     Leaflet map and DOM rendering
 api/socrata.js          proxy to NYC Open Data that adds the app token server-side
 api/route.js            proxy to openrouteservice that adds the routing key server-side
+api/refresh-sheds.js    daily cron target: redeploys so the shed snapshot is rebuilt
+scripts/build.mjs       deploy build: copies the site, writes data/sheds.json
 ```
 
-The browser calls `/api/socrata` and `/api/route` rather than the upstream services, so the Socrata app token and the openrouteservice key stay on the server. `/api/route` only routes short walks inside New York City. The proxy only accepts the two datasets and the query fields the app uses, caps the row count, and caches successful answers at the edge for 5 minutes.
+The browser calls `/api/socrata` and `/api/route` rather than the upstream services, so the Socrata app token and the openrouteservice key stay on the server. `/api/route` only routes short walks inside New York City. The proxy only accepts the 311 dataset and the query fields the app uses, caps the row count, and caches successful answers at the edge for 5 minutes.
+
+Shed permits change once a day, so they don't go through the proxy. Each build downloads every shed and scaffold permit (about 185,000 rows), groups them into active structures (about 13,000) and writes them to the static file `data/sheds.json` (about 0.5 MB gzipped). The browser reads that file and keeps the structures inside the survey circle. A Vercel cron calls `/api/refresh-sheds` every morning, which triggers a redeploy through a deploy hook. If the download fails, or returns suspiciously few structures, the build fails and the previous deployment, with its snapshot, stays live.
 
 ## Running it
 
 Requires Node 22+ (tests use the built-in runner, no dependencies) and the [Vercel CLI](https://vercel.com/docs/cli) for local serving.
 
 ```bash
-npm test          # unit tests: scoring, planner, data parsing, proxy, themes
-vercel dev        # local server with the /api proxy
+npm test                 # unit tests: scoring, planner, data parsing, proxy, themes
+node scripts/build.mjs   # downloads the shed snapshot into data/ (about a minute)
+vercel dev               # local server with the /api proxy
 ```
 
-A plain static file server will show the page but cannot run `/api/socrata`, so no data loads.
+A plain static file server will show the page but cannot run `/api/socrata`, so 311 data won't load.
 
 ### Deploying your own
 
@@ -77,6 +82,12 @@ A plain static file server will show the page but cannot run `/api/socrata`, so 
    vercel env add ORS_API_KEY --environment production
    ```
 4. Deploy with `vercel deploy --prod`. `vercel.json` copies the site into `dist/`, and `api/` is deployed as a function.
+5. For the daily shed refresh, create a deploy hook for the production branch (Project Settings → Git → Deploy Hooks), then add its URL and a random cron secret:
+   ```bash
+   vercel env add DEPLOY_HOOK_URL --environment production
+   vercel env add CRON_SECRET --environment production
+   ```
+   Without them the snapshot only updates when you deploy.
 
 The app works without either: without the Socrata token anonymous requests are rate-limited heavily, and without the routing key itineraries use the straight-line estimate.
 

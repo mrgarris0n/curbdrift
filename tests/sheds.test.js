@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupShedPermits, buildShedParams } from '../js/sources/sheds.js';
+import { groupShedPermits, snapshotQuery, toSnapshot, shedsFromSnapshot, fetchSheds, SNAPSHOT_URL } from '../js/sources/sheds.js';
+import { RecordsUnavailableError } from '../js/sources/socrata.js';
 
 const TODAY = new Date('2026-11-06T12:00:00Z');
 
@@ -81,25 +82,44 @@ test('separate work types are separate items', () => {
   assert.equal(groupShedPermits(rows, TODAY).length, 2);
 });
 
-test('buildShedParams', () => {
-  const p = buildShedParams({ lat: 40.7359, lon: -73.9911 }, 400);
-  assert.match(p.$where, /'Sidewalk Shed','Supported Scaffold','Suspended Scaffold'/);
-  assert.match(p.$where, /latitude between/);
-  assert.match(p.$where, /longitude between/);
-  assert.equal(p.$limit, '10000');
+test('snapshotQuery asks for every shed and scaffold citywide, without the long job description', () => {
+  const q = snapshotQuery();
+  assert.match(q.$where, /'Sidewalk Shed','Supported Scaffold','Suspended Scaffold'/);
+  assert.doesNotMatch(q.$where, /latitude/);
+  assert.match(q.$select, /job_filing_number/);
+  assert.doesNotMatch(q.$select, /job_description/);
 });
 
-test('fetchSheds keeps only structures inside the survey circle', async () => {
-  const { fetchSheds } = await import('../js/sources/sheds.js');
+test('snapshot round trip keeps the facts and trims to the survey circle', () => {
   const near = permit('2025-01-01', '2099-01-01', { bin: 'near', latitude: '40.7360', longitude: '-73.9911' });
-  // Inside the bbox corner but ~540m from center.
-  const corner = permit('2025-01-01', '2099-01-01', { bin: 'corner', latitude: '40.7393', longitude: '-73.9866' });
-  const fetchImpl = async () => ({ ok: true, status: 200, json: async () => [near, corner] });
-  const items = await fetchSheds({ lat: 40.7359, lon: -73.9911 }, 400, { fetchImpl, storage: null });
+  // ~540 m from center.
+  const far = permit('2025-01-01', '2099-01-01', { bin: 'far', latitude: '40.7393', longitude: '-73.9866' });
+  const snapshot = JSON.parse(JSON.stringify(toSnapshot([near, far], TODAY)));
+  assert.equal(snapshot.sheds.length, 2);
+  const items = shedsFromSnapshot(snapshot, { lat: 40.7359, lon: -73.9911 }, 400, TODAY);
   assert.deepEqual(items.map((x) => x.id.split('|')[0]), ['near']);
+  assert.equal(items[0].kind, 'S');
+  assert.equal(items[0].chainStart.toISOString().slice(0, 10), '2025-01-01');
+  assert.equal(items[0].latestExpiry.toISOString().slice(0, 10), '2099-01-01');
 });
 
-test('buildShedParams does not fetch the long job description (keeps responses under the function size cap)', () => {
-  const p = buildShedParams({ lat: 40.7359, lon: -73.9911 }, 400);
-  assert.doesNotMatch(p.$select, /job_description/);
+test('permits that expired after the snapshot was made are dropped', () => {
+  const snapshot = toSnapshot([permit('2025-01-01', '2026-11-08')], TODAY);
+  const center = { lat: 40.733809, lon: -73.991 };
+  assert.equal(shedsFromSnapshot(snapshot, center, 400, new Date('2026-11-08T00:00:00Z')).length, 1);
+  assert.equal(shedsFromSnapshot(snapshot, center, 400, new Date('2026-11-09T00:00:00Z')).length, 0);
+});
+
+test('fetchSheds reads the static snapshot, not the API', async () => {
+  const snapshot = toSnapshot([permit('2025-01-01', '2099-01-01')], TODAY);
+  const urls = [];
+  const fetchImpl = async (url) => { urls.push(url); return { ok: true, status: 200, json: async () => snapshot }; };
+  const items = await fetchSheds({ lat: 40.733809, lon: -73.991 }, 400, { fetchImpl });
+  assert.deepEqual(urls, [SNAPSHOT_URL]);
+  assert.equal(items.length, 1);
+});
+
+test('a malformed snapshot is a records failure', async () => {
+  const fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({ nope: true }) });
+  await assert.rejects(fetchSheds({ lat: 40.7, lon: -73.9 }, 400, { fetchImpl }), RecordsUnavailableError);
 });
