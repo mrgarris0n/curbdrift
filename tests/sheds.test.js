@@ -56,6 +56,17 @@ test('signed-off latest excluded', () => {
   assert.deepEqual(groupShedPermits(rows, TODAY), []);
 });
 
+test('a signed-off job does not hide another active job on the same building', () => {
+  // Real case (BIN 1800014): the job with the latest expiry was signed off, another job is still up.
+  const rows = [
+    permit('2026-07-01', '2027-01-28', { job_filing_number: 'M01482899-I1', permit_status: 'Signed-off' }),
+    permit('2026-10-29', '2026-12-31', { job_filing_number: 'M01482386-I1' }),
+  ];
+  const items = groupShedPermits(rows, TODAY);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].latestExpiry.toISOString().slice(0, 10), '2026-12-31');
+});
+
 test('bad coordinates skipped', () => {
   const rows = [
     permit('2025-01-01', '2027-01-01', { latitude: undefined }),

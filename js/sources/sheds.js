@@ -16,7 +16,7 @@ export function buildShedParams(center, radiusM) {
   const b = bboxAround(center, radiusM);
   const types = WORK_TYPES.map((t) => `'${t}'`).join(',');
   return {
-    $select: 'bin,house_no,street_name,borough,work_type,issued_date,expired_date,permit_status,latitude,longitude,owner_business_name,applicant_business_name',
+    $select: 'bin,job_filing_number,house_no,street_name,borough,work_type,issued_date,expired_date,permit_status,latitude,longitude,owner_business_name,applicant_business_name',
     $where: `work_type in(${types}) AND latitude between ${b.south.toFixed(6)} and ${b.north.toFixed(6)} AND longitude between ${b.west.toFixed(6)} and ${b.east.toFixed(6)}`,
     $limit: '10000',
   };
@@ -35,7 +35,7 @@ const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 
 /**
  * Collapse yearly permits into structures. A structure is one bin + work type; it is
- * active when its latest permit has not expired and was not signed off (signed-off = removed).
+ * active when any of its jobs' latest permit has not expired and was not signed off (signed-off = removed).
  * Its age is the start of the unbroken permit chain ending at the latest permit, where
  * permits less than SHED_GAP_DAYS apart (or overlapping) count as continuous.
  * @returns {ShedFacts[]}
@@ -53,8 +53,16 @@ export function groupShedPermits(rows, today) {
   const items = [];
   for (const [key, permits] of groups) {
     permits.sort((a, b) => a.issued - b.issued || a.expired - b.expired);
-    const latest = permits.reduce((best, p) => (p.expired > best.expired || (+p.expired === +best.expired && p.issued > best.issued) ? p : best));
-    if (latest.expired < today || latest.row.permit_status === 'Signed-off') continue;
+    // A building can have several shed jobs at once; each is up until its own latest
+    // permit expires or is signed off, so one finished job must not hide another.
+    const jobLatest = new Map();
+    for (const p of permits) {
+      const best = jobLatest.get(p.row.job_filing_number);
+      if (!best || p.expired > best.expired || (+p.expired === +best.expired && p.issued > best.issued)) jobLatest.set(p.row.job_filing_number, p);
+    }
+    const active = [...jobLatest.values()].filter((p) => p.expired >= today && p.row.permit_status !== 'Signed-off');
+    if (active.length === 0) continue;
+    const latest = active.reduce((best, p) => (p.expired > best.expired || (+p.expired === +best.expired && p.issued > best.issued) ? p : best));
 
     // coveredUntil[i] = latest expiry among permits[0..i-1], i.e. how long the structure was
     // already covered when permit i was issued. Walk backward while that gap stays small.
