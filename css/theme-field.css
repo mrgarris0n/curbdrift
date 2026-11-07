@@ -103,3 +103,7 @@
 [data-theme="field"] .marker-user .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-sizing: border-box; }
 [data-theme="field"] .marker-user .code { color: var(--accent); left: 16px; top: 0; }
 [data-theme="field"] .route-line { stroke: var(--accent); }
+[data-theme="field"] .credits-section h3 { font-style: italic; font-size: 0.85rem; }
+[data-theme="field"] .credits-section p, [data-theme="field"] .credits-sources a { font-size: 0.98rem; }
+[data-theme="field"] .link-button { font-size: 0.9rem; font-style: italic; }
+[data-theme="field"] .credits-provider { margin-top: 0.15rem; }

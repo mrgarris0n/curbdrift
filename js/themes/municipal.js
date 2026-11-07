@@ -113,6 +113,16 @@ export const municipal = {
     ];
   },
 
+  credits: {
+    button: 'CREDITS',
+    title: 'FORM CD-0: ACKNOWLEDGEMENTS',
+    developer: 'Developer of record',
+    code: 'Source code (public record)',
+    sources: 'Records consulted',
+    builtWith: 'Cartographic apparatus',
+    inspiredBy: (name) => `Inspired by the works of ${name}.`,
+  },
+
   messages: {
     loading: ['Retrieving records…', 'Consulting the Department of Buildings…', 'Cross-referencing 311 complaints…', 'Requesting precipitation records…'],
     empty: 'No deterioration on file. This is itself suspicious.',

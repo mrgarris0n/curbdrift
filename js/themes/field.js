@@ -128,6 +128,16 @@ export const field = {
     ];
   },
 
+  credits: {
+    button: 'Credits',
+    title: 'Who made this',
+    developer: 'Made by',
+    code: 'The code',
+    sources: 'Where the facts come from',
+    builtWith: 'The map is drawn with',
+    inspiredBy: (name) => `Inspired by the works of ${name}, who taught us to look at this stuff.`,
+  },
+
   messages: {
     loading: ['Looking around…', 'Asking the Department of Buildings…', 'Reading old complaints…', 'Checking whether it rained…'],
     empty: 'Nothing nearby has been left alone long enough. That is unusual.',

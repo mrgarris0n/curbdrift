@@ -7,7 +7,8 @@ import { fetchWeather, summarizeWeather } from './sources/weather.js';
 import { scoreShed, scorePuddle, scoreDefect, areaRating } from './scoring.js';
 import { THEMES, pickTheme } from './themes/index.js';
 import { createMap } from './map.js';
-import { renderHeader, renderSummary, openSheet, openRoute, closeSheet, isSheetOpen, showNotice, showResurvey, hideResurvey, refreshResurvey, focusThemeSwitch } from './ui.js';
+import { CREDITS } from './credits.js';
+import { renderHeader, renderSummary, openSheet, openRoute, openCredits, closeSheet, isSheetOpen, showNotice, showResurvey, hideResurvey, refreshResurvey, focusThemeSwitch } from './ui.js';
 import { planRoute } from './route.js';
 
 const THEME_KEY = 'curbdrift.theme';
@@ -95,7 +96,8 @@ export async function gatherSurvey(at, today, sources = { fetchSheds, fetchCompl
 
 async function main() {
   // What is on screen, kept so a theme switch can re-render it in the new voice.
-  let rerender = () => renderSummary(theme, { counts: { S: 0, P: 0, D: 0 }, rating: 0, pending: true, errors: {} });
+  const onCredits = () => { reopenSheet = () => openCredits(theme, CREDITS); reopenSheet(); };
+  let rerender = () => renderSummary(theme, { counts: { S: 0, P: 0, D: 0 }, rating: 0, pending: true, errors: {}, onCredits });
   let reopenSheet = null;
   let user = null;
   let activeRoute = null; // the itinerary drawn on the map, if any
@@ -177,7 +179,7 @@ async function main() {
         if (!route.stops.length) activeRoute = null;
         rerender();
       };
-      renderSummary(theme, { counts, rating: areaRating(items), pending, errors, onRoute, routeActive: Boolean(activeRoute) });
+      renderSummary(theme, { counts, rating: areaRating(items), pending, errors, onRoute, routeActive: Boolean(activeRoute), onCredits });
     };
     const show = (result, pending) => {
       rerender = () => render(result, pending);

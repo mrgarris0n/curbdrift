@@ -107,3 +107,5 @@
 [data-theme="municipal"] .rule { border-top: 1px solid var(--rule); }
 [data-theme="municipal"] .marker.off-route { opacity: 0.22; }
 [data-theme="municipal"] .theme-switch { background: transparent; color: var(--bar-ink); border: 1px solid rgba(255, 255, 255, 0.6); font-family: var(--font); letter-spacing: 0.04em; }
+[data-theme="municipal"] .credits-section h3 { letter-spacing: 0.06em; text-transform: uppercase; }
+[data-theme="municipal"] .credits-section p, [data-theme="municipal"] .credits-sources a { font-size: 0.8rem; font-weight: 700; }

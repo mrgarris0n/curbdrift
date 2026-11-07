@@ -90,6 +90,12 @@ export function renderSummary(theme, state) {
     box.append(routeButton);
   }
   box.append(el('p', 'hint', theme.messages.tapHint));
+  if (state.onCredits) {
+    const credits = el('button', 'link-button', theme.credits.button);
+    credits.type = 'button';
+    credits.addEventListener('click', state.onCredits);
+    box.append(credits);
+  }
   syncPanelHeight();
 }
 
@@ -114,6 +120,41 @@ export function openSheet(theme, item, onClose) {
 }
 
 /** The walking itinerary file. Its button cancels the itinerary. */
+function link(text, href) {
+  const a = el('a', null, text);
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  return a;
+}
+
+/** Credits: developer, source code, every data source, and the inspiration. */
+export function openCredits(theme, credits) {
+  const c = theme.credits;
+  const para = (...children) => {
+    const node = el('p');
+    node.append(...children);
+    return node;
+  };
+  const section = (heading, ...body) => {
+    const div = el('div', 'credits-section');
+    div.append(el('h3', null, heading), ...body);
+    return div;
+  };
+  const sources = el('ul', 'credits-sources');
+  for (const s of credits.sources) {
+    const li = el('li');
+    li.append(link(s.name, s.url), el('span', 'credits-provider', s.provider));
+    sources.append(li);
+  }
+  showSheet(theme.credits.title, theme.messages.close, null,
+    section(c.developer, para(credits.developer)),
+    section(c.code, para(link(credits.repo.replace(/^https:\/\//, ''), credits.repo))),
+    section(c.sources, sources),
+    section(c.builtWith, para(link(credits.builtWith.name, credits.builtWith.url))),
+    el('p', 'stamp credits-inspiration', c.inspiredBy(credits.inspiration)));
+}
+
 export function openRoute(theme, route, onCancel) {
   const content = route.stops.length
     ? [rowsList(theme.routeSummaryRows(route)), el('hr', 'rule'), rowsList(theme.routeStopRows(route)), el('span', 'stamp', theme.routeStamp)]
