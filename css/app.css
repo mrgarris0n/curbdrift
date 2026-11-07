@@ -50,6 +50,19 @@ body {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 .panel h2 { margin: 0 0 0.35rem; }
+.summary h2 { margin: 0; }
+.summary-body { margin-top: 0.35rem; }
+/* The summary title doubles as its fold toggle; it keeps the heading's look. */
+.summary-toggle {
+  display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
+  width: 100%; min-height: 2rem; margin: 0; padding: 0;
+  border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: left;
+  cursor: pointer;
+}
+.summary-toggle::after { content: '▾'; flex: 0 0 auto; font-size: 1.1em; line-height: 1; transition: transform 0.15s; }
+.summary-toggle[aria-expanded="false"]::after { transform: rotate(180deg); }
+.summary-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .summary-toggle::after { transition: none; } }
 .panel .status-line { font-size: 0.72rem; margin: 0.15rem 0 0.4rem; }
 .panel .errors { font-size: 0.72rem; margin: 0.4rem 0 0; padding: 0; list-style: none; }
 .panel .hint { font-size: 0.68rem; margin: 0.5rem 0 0; opacity: 0.75; }

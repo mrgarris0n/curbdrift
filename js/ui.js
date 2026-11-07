@@ -46,14 +46,50 @@ export function renderHeader(theme, radiusM, onSwitchTheme) {
 let loadingTimer = null;
 let loadingIndex = 0;
 
+// The summary can fold down to its title to give the map room. Remembered per browser.
+const COLLAPSED_KEY = 'curbdrift.summaryCollapsed';
+let summaryCollapsed = (() => {
+  try {
+    return globalThis.localStorage?.getItem(COLLAPSED_KEY) === '1';
+  } catch {
+    return false; // storage blocked: start expanded
+  }
+})();
+
+function setSummaryCollapsed(collapsed) {
+  summaryCollapsed = collapsed;
+  try {
+    globalThis.localStorage?.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
+  } catch {
+    // not remembered; still works for this page
+  }
+}
+
 /**
  * @param {{counts:{S:number,P:number,D:number}, rating:number, pending:boolean,
  *   errors:{S?:boolean,P?:boolean,D?:boolean}}} state
  */
 export function renderSummary(theme, state) {
-  const box = $('summary');
-  box.replaceChildren();
-  box.append(el('h2', null, theme.messages.summaryTitle));
+  const summary = $('summary');
+  const hadFocus = summary.contains(document.activeElement); // re-rendering must not drop it
+  summary.replaceChildren();
+  const box = el('div', 'summary-body');
+  box.id = 'summary-body';
+  box.hidden = summaryCollapsed;
+  const toggle = el('button', 'summary-toggle', theme.messages.summaryTitle);
+  toggle.type = 'button';
+  toggle.setAttribute('aria-controls', box.id);
+  toggle.setAttribute('aria-expanded', String(!summaryCollapsed));
+  toggle.addEventListener('click', () => {
+    setSummaryCollapsed(!summaryCollapsed);
+    box.hidden = summaryCollapsed;
+    toggle.setAttribute('aria-expanded', String(!summaryCollapsed));
+    syncPanelHeight();
+  });
+  const heading = el('h2');
+  heading.append(toggle);
+  summary.append(heading, box);
+  if (hadFocus) toggle.focus({ preventScroll: true });
 
   const status = el('p', 'status-line');
   status.id = 'status-line';
