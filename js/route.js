@@ -4,7 +4,8 @@
 // still fits the budget. Taking turns keeps a dense block of old sheds from crowding out every
 // puddle and broken sidewalk. Several items at one spot (one building) take a single stop.
 //
-// Distances are straight lines × WALK_FACTOR to approximate the street grid (no routing service).
+// Planning uses straight lines × WALK_FACTOR to approximate the street grid; fitStreetRoute then
+// measures the loop along real streets and re-plans tighter until the street walk fits the budget.
 import { distanceM } from './geo.js';
 
 export const WALK_FACTOR = 1.3;
@@ -83,6 +84,32 @@ export function planRoute(start, items, budgetM = DEFAULT_BUDGET_M) {
     minutes: Math.round(total / WALK_M_PER_MIN),
     totalScore: stops.reduce((sum, s) => sum + s.score, 0),
   };
+}
+
+// Each attempt is one call to the walking router; the budget correction usually fits by the second.
+export const MAX_ROUTING_ATTEMPTS = 4;
+
+/**
+ * Plan the walk so the budget holds along real streets, not just for the straight-line estimate.
+ * Plans, measures the loop with `routeLoop` (points → walking route), and while the street walk is
+ * too long, plans again with the planning budget scaled down by how much the streets overshot.
+ * @returns {Promise<object|null>} a 'streets' route within budgetM (or with no stops), or null if
+ *   none fit within MAX_ROUTING_ATTEMPTS. Router errors propagate.
+ */
+export async function fitStreetRoute(start, items, routeLoop, budgetM = DEFAULT_BUDGET_M) {
+  let planBudget = budgetM;
+  let last = null; // { key, walking } of the previous attempt, so an unchanged plan is not re-routed
+  for (let attempt = 0; attempt < MAX_ROUTING_ATTEMPTS; attempt += 1) {
+    const planned = planRoute(start, items, planBudget);
+    if (!planned.stops.length) return planned;
+    const key = planned.stops.map((s) => s.id).join('|');
+    const walking = key === last?.key ? last.walking : await routeLoop([start, ...planned.stops, start]);
+    if (walking.distanceM <= budgetM) return withStreetRoute(planned, walking);
+    last = { key, walking };
+    // Strictly smaller every time (the walk overshot), with a little margin for the next try.
+    planBudget *= (budgetM / walking.distanceM) * 0.98;
+  }
+  return null;
 }
 
 /**

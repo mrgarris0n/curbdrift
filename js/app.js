@@ -9,7 +9,7 @@ import { THEMES, pickTheme } from './themes/index.js';
 import { createMap } from './map.js';
 import { CREDITS } from './credits.js';
 import { renderHeader, renderSummary, openSheet, openRoute, openCredits, closeSheet, isSheetOpen, showNotice, showResurvey, hideResurvey, refreshResurvey, focusThemeSwitch } from './ui.js';
-import { planRoute, withStreetRoute } from './route.js';
+import { planRoute, fitStreetRoute } from './route.js';
 import { fetchWalkingRoute } from './sources/walking.js';
 
 const THEME_KEY = 'curbdrift.theme';
@@ -181,12 +181,14 @@ async function main() {
         const loop = [at, ...planned.stops, at];
         map.setRoute(loop, document.getElementById('sheet').offsetHeight);
         rerender();
-        // …then the same walk along real streets, if the router answers. Otherwise the estimate stays.
-        fetchWalkingRoute(loop.map(({ lat, lon }) => ({ lat, lon })), { signal: inFlight?.signal })
-          .then((walking) => {
-            if (activeRoute !== planned) return; // cancelled or replaced meanwhile
-            activeRoute = withStreetRoute(planned, walking);
-            map.setRoute(loop, 0, { line: activeRoute.path, fit: false });
+        // …then a walk measured along real streets that keeps within the budget there too (it may
+        // drop stops the estimate allowed). If the router fails or nothing fits, the estimate stays.
+        const routeLoop = (points) => fetchWalkingRoute(points.map(({ lat, lon }) => ({ lat, lon })), { signal: inFlight?.signal });
+        fitStreetRoute(at, items, routeLoop)
+          .then((street) => {
+            if (activeRoute !== planned || !street?.stops.length) return; // cancelled, replaced, or no fit
+            activeRoute = street;
+            map.setRoute([at, ...street.stops, at], 0, { line: street.path, fit: false });
             if (isSheetOpen() && reopenSheet === showRoute) showRoute({ focus: false });
           })
           .catch((err) => console.warn('walking route', err));

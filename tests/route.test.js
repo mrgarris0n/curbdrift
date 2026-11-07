@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { planRoute, WALK_FACTOR, WALK_M_PER_MIN } from '../js/route.js';
+import { planRoute, fitStreetRoute, WALK_FACTOR, WALK_M_PER_MIN, MAX_ROUTING_ATTEMPTS } from '../js/route.js';
 import { distanceM } from '../js/geo.js';
 
 const START = { lat: 40.7359, lon: -73.9911 };
@@ -125,4 +125,72 @@ test('items below MIN_DETOUR_SCORE are never stops, even when their kind has not
   const items = [ofKind('S', 'old-shed', 80, 100, 0), ofKind('P', 'dry-puddle', 8, 0, 100), ofKind('P', 'wet-puddle', 40, 0, 150), ofKind('S', 'new-shed', 10, 50, 50)];
   const ids = planRoute(START, items, 5000).stops.map((s) => s.id).sort();
   assert.deepEqual(ids, ['old-shed', 'wet-puddle']);
+});
+
+// A fake walking router: streets are `factor` × the straight line, one leg per hop.
+function router(factor) {
+  const calls = [];
+  const routeLoop = async (points) => {
+    calls.push(points);
+    const legs = points.slice(1).map((p, i) => {
+      const d = distanceM(points[i], p) * factor;
+      return { distanceM: d, durationS: d / 1.3 };
+    });
+    const total = legs.reduce((sum, l) => sum + l.distanceM, 0);
+    return { distanceM: total, durationS: total / 1.3, legs, path: points.map((p) => [p.lat, p.lon]) };
+  };
+  return { calls, routeLoop };
+}
+const grid = () => {
+  const items = [];
+  for (let i = 0; i < 40; i++) items.push(item(`i${i}`, 20 + i, (i % 7) * 90 - 275, Math.floor(i / 7) * 100 - 305));
+  return items;
+};
+
+test('fitStreetRoute: when streets match the estimate, one routing call and the plan is kept', async () => {
+  const r = router(WALK_FACTOR);
+  const route = await fitStreetRoute(START, grid(), r.routeLoop, 2000);
+  assert.equal(r.calls.length, 1);
+  assert.equal(route.method, 'streets');
+  assert.deepEqual(route.stops.map((s) => s.id), planRoute(START, grid(), 2000).stops.map((s) => s.id));
+});
+
+test('fitStreetRoute: when the streets are longer than estimated, the street walk still holds the budget', async () => {
+  const r = router(1.6);
+  const overshoot = planRoute(START, grid(), 2000);
+  assert.ok(overshoot.distanceM / WALK_FACTOR * 1.6 > 2000, 'precondition: the plain plan overshoots on these streets');
+  const route = await fitStreetRoute(START, grid(), r.routeLoop, 2000);
+  assert.equal(route.method, 'streets');
+  assert.ok(route.distanceM <= 2000, route.distanceM);
+  assert.ok(route.stops.length > 0);
+  assert.ok(r.calls.length > 1 && r.calls.length <= MAX_ROUTING_ATTEMPTS, String(r.calls.length));
+  // Legs and totals come from the street route that was accepted.
+  assert.ok(Math.abs(route.stops.at(-1).atM - route.stops.reduce((s, x) => s + x.legM, 0)) < 1e-6);
+});
+
+test('fitStreetRoute: even absurd detours shrink the walk until it fits', async () => {
+  const route = await fitStreetRoute(START, grid(), router(50).routeLoop, 2000);
+  assert.ok(route === null || route.distanceM <= 2000, String(route?.distanceM));
+});
+
+test('fitStreetRoute: gives up (null) rather than return a street walk over budget', async () => {
+  let calls = 0;
+  const neverFits = async (points) => {
+    calls += 1;
+    return { distanceM: 1e6, durationS: 1e6, legs: points.slice(1).map(() => ({ distanceM: 1e6 / (points.length - 1), durationS: 1 })), path: [] };
+  };
+  const route = await fitStreetRoute(START, grid(), neverFits, 2000);
+  assert.ok(route === null || route.stops.length === 0, JSON.stringify(route));
+  assert.ok(calls <= MAX_ROUTING_ATTEMPTS, String(calls));
+});
+
+test('fitStreetRoute: no candidates means no routing call', async () => {
+  const r = router(1.6);
+  const route = await fitStreetRoute(START, [], r.routeLoop, 2000);
+  assert.deepEqual(route.stops, []);
+  assert.equal(r.calls.length, 0);
+});
+
+test('fitStreetRoute: router errors propagate so the caller keeps the estimate', async () => {
+  await assert.rejects(fitStreetRoute(START, grid(), async () => { throw new Error('HTTP 429'); }, 2000), /429/);
 });
