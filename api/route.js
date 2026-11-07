@@ -4,7 +4,9 @@
 // walks inside New York City, so this cannot be used as a general-purpose router on our quota.
 import { isInNyc } from '../js/geo.js';
 
-const UPSTREAM = 'https://api.openrouteservice.org/v2/directions/foot-walking/geojson';
+// api.openrouteservice.org was deprecated (shut down Nov 2026); same key, same format here:
+// https://ask.openrouteservice.org/t/deprecating-api-openrouteservice-org-in-favour-of-api-heigit-org/7912
+const UPSTREAM = 'https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson';
 export const MAX_POINTS = 14; // start + 12 stops + return to start
 const TIMEOUT_MS = 20000;
 

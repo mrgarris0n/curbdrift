@@ -31,7 +31,8 @@ test('routes a walk through OpenRouteService with the key added server-side', as
   const u = upstream(orsAnswer);
   const res = await handleRoute(req({ points: [UNION_SQ, NEAR, UNION_SQ] }), { key: 'secret-key', fetchImpl: u.impl });
   assert.equal(res.status, 200);
-  assert.equal(u.calls[0].url, 'https://api.openrouteservice.org/v2/directions/foot-walking/geojson');
+  // api.openrouteservice.org was retired in Nov 2026 in favour of api.heigit.org.
+  assert.equal(u.calls[0].url, 'https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson');
   assert.equal(u.calls[0].init.method, 'POST');
   assert.equal(u.calls[0].init.headers.Authorization, 'secret-key');
   const sent = JSON.parse(u.calls[0].init.body);
