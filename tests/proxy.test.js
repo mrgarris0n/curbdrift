@@ -105,3 +105,13 @@ test('city=chicago forwards to the Chicago portal; datasets do not cross cities'
   assert.equal((await handleSocrata(req('city=nyc&dataset=v6vf-nfxy'), { token: 't', fetchImpl: u.impl })).status, 400);
   assert.equal(u.calls.length, 1);
 });
+
+// Socrata sometimes takes over 80 s to answer a 311 query it hasn't cached (measured 2026-11-08:
+// 62.5 s and 80.4 s at Sunset Park). Giving up sooner showed puddles and defects as unavailable
+// while Socrata finished and cached the answer, so a second press then worked at once.
+test('the proxy waits long enough for a slow Socrata answer, and the browser outlasts the proxy', async () => {
+  const { UPSTREAM_TIMEOUT_MS } = await import('../api/socrata.js');
+  const { REQUEST_TIMEOUT_MS } = await import('../js/sources/socrata.js');
+  assert.ok(UPSTREAM_TIMEOUT_MS >= 90000, `proxy waits ${UPSTREAM_TIMEOUT_MS} ms`);
+  assert.ok(REQUEST_TIMEOUT_MS > UPSTREAM_TIMEOUT_MS, `browser ${REQUEST_TIMEOUT_MS} ms must outlast proxy ${UPSTREAM_TIMEOUT_MS} ms`);
+});

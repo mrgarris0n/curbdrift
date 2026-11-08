@@ -4,7 +4,9 @@ import { requestSignal } from '../net.js';
 // Our own proxy (api/socrata.js) forwards to NYC Open Data and adds the app token server-side.
 const PROXY = '/api/socrata';
 // The 311 radius query alone measured ~7 s; past this the records office is treated as unavailable.
-const REQUEST_TIMEOUT_MS = 30000;
+// Longer than the proxy's own wait for Socrata (UPSTREAM_TIMEOUT_MS in api/socrata.js), so the
+// browser never gives up on an answer the proxy is still waiting for.
+export const REQUEST_TIMEOUT_MS = 100000;
 
 /** The records office (NYC Open Data) could not be reached or refused the request. */
 export class RecordsUnavailableError extends Error {
