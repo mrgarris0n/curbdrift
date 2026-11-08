@@ -98,3 +98,9 @@ test('a cancelled survey cancels its request', async () => {
   const tooSlow = new Promise((_, reject) => setTimeout(() => reject(new Error('not cancelled')), 500));
   await assert.rejects(Promise.race([pending, tooSlow]), RecordsUnavailableError);
 });
+
+test('the city is passed to the proxy', async () => {
+  const f = fakeFetch([]);
+  await socrataQuery('abcd-1234', {}, { city: 'nyc', fetchImpl: f.impl, storage: null });
+  assert.match(f.calls[0].url, /^\/api\/socrata\?city=nyc&dataset=abcd-1234/);
+});

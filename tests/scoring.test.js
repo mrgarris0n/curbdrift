@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { classifyShed, mayorsOutlasted, scoreShed, areaRating } from '../js/scoring.js';
+import { CITIES } from '../js/cities.js';
+
+const NYC_MAYORS = CITIES.nyc.mayorTermStarts;
 
 // n complaints of one descriptor; 'Flooding on Street' carries full weight.
 const filed = (n, descriptor = 'Flooding on Street') => ({ complaintCount: n, byDescriptor: n ? { [descriptor]: n } : {} });
@@ -13,19 +16,19 @@ test('classifyShed thresholds', () => {
 });
 
 test('mayorsOutlasted counts terms begun after chain start, up to today', () => {
-  assert.equal(mayorsOutlasted(new Date('2017-10-20'), new Date('2026-11-06')), 2);
-  assert.equal(mayorsOutlasted(new Date('2023-01-01'), new Date('2026-11-06')), 1);
-  assert.equal(mayorsOutlasted(new Date('2026-06-01'), new Date('2026-11-06')), 0);
+  assert.equal(mayorsOutlasted(new Date('2017-10-20'), new Date('2026-11-06'), NYC_MAYORS), 2);
+  assert.equal(mayorsOutlasted(new Date('2023-01-01'), new Date('2026-11-06'), NYC_MAYORS), 1);
+  assert.equal(mayorsOutlasted(new Date('2026-06-01'), new Date('2026-11-06'), NYC_MAYORS), 0);
 });
 
 test('shed score caps at 100 for 9+ years', () => {
-  const s = scoreShed({ chainStart: new Date('2017-10-01') }, new Date('2026-11-06'));
+  const s = scoreShed({ chainStart: new Date('2017-10-01') }, new Date('2026-11-06'), NYC_MAYORS);
   assert.equal(s.score, 100);
   assert.equal(s.classKey, 'permanent');
 });
 
 test('shed score scales with years', () => {
-  const s = scoreShed({ chainStart: new Date('2023-11-06') }, new Date('2026-11-06'));
+  const s = scoreShed({ chainStart: new Date('2023-11-06') }, new Date('2026-11-06'), NYC_MAYORS);
   assert.ok(Math.abs(s.yearsContinuous - 3) < 0.01);
   assert.ok(Math.abs(s.score - 33.33) < 0.1);
   assert.equal(s.mayorsOutlasted, 1);

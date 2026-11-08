@@ -1,11 +1,14 @@
-// Vercel Function: GET /api/socrata?dataset=<id>&$select=…&$where=…&$limit=…
-// Forwards the app's NYC Open Data queries and adds the Socrata app token server-side,
-// so the token never reaches the browser. Deliberately narrow: only the dataset and the
-// query parameters the app uses, so this is not a general-purpose open proxy. (Sheds come
-// from the static snapshot built at deploy time, not through here.)
+// Vercel Function: GET /api/socrata?city=<id>&dataset=<id>&$select=…&$where=…&$limit=…
+// Forwards the app's open-data queries to that city's Socrata portal and adds the Socrata app
+// token server-side, so the token never reaches the browser. Deliberately narrow: only each
+// city's allowlisted datasets and the query parameters the app uses, so this is not a
+// general-purpose open proxy. (Sheds come from static snapshots built at deploy time, not here.)
 
-const UPSTREAM = 'https://data.cityofnewyork.us/resource/';
-const DATASETS = new Set(['erm2-nwe9']); // 311 requests
+const CITIES = {
+  nyc: { upstream: 'https://data.cityofnewyork.us/resource/', datasets: new Set(['erm2-nwe9']) }, // 311 requests
+};
+// Before cities existed, the app sent no city: a tab left open across a deploy still means New York.
+const DEFAULT_CITY = 'nyc';
 const PARAMS = ['$select', '$where', '$limit'];
 const MAX_LIMIT = 10000;
 const TIMEOUT_MS = 25000;
@@ -21,8 +24,10 @@ export async function handleSocrata(request, { token = process.env.SOCRATA_APP_T
   if (request.method !== 'GET') return json({ message: 'method not allowed' }, 405);
 
   const params = new URL(request.url).searchParams;
+  const city = Object.hasOwn(CITIES, params.get('city') ?? DEFAULT_CITY) ? CITIES[params.get('city') ?? DEFAULT_CITY] : null;
+  if (!city) return json({ message: 'unknown city' }, 400);
   const dataset = params.get('dataset');
-  if (!DATASETS.has(dataset)) return json({ message: 'unknown dataset' }, 400);
+  if (!city.datasets.has(dataset)) return json({ message: 'unknown dataset' }, 400);
 
   const forward = new URLSearchParams();
   for (const key of PARAMS) {
@@ -37,7 +42,7 @@ export async function handleSocrata(request, { token = process.env.SOCRATA_APP_T
 
   let upstream;
   try {
-    upstream = await fetchImpl(`${UPSTREAM}${dataset}.json?${forward}`, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    upstream = await fetchImpl(`${city.upstream}${dataset}.json?${forward}`, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch {
     return json({ message: 'records office unreachable' }, 502);
   }

@@ -2,6 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assignCodes } from '../js/app.js';
 import { municipal } from '../js/themes/municipal.js';
+import { CITIES } from '../js/cities.js';
+
+// A city like New York but with test doubles for its data sources.
+const cityWith = (sources) => ({ ...CITIES.nyc, sources });
 
 test('assignCodes numbers each kind by descending score', () => {
   const items = assignCodes([
@@ -57,13 +61,13 @@ const facts = {
 
 test('gatherSurvey: weather that resolves but cannot be summarized still yields puddles as unknown', async () => {
   const { gatherSurvey } = await import('../js/app.js');
-  const result = await gatherSurvey({ lat: 0, lon: 0 }, new Date('2026-11-06T00:00:00Z'), {
+  const result = await gatherSurvey({ lat: 0, lon: 0 }, new Date('2026-11-06T00:00:00Z'), cityWith({
     fetchSheds: async () => [facts.shed],
     fetchComplaints: async () => ({ puddles: [facts.puddle], defects: [facts.defect] }),
     // 200 but missing arrays. The hour must sit inside the real-clock 72h window, or nothing reads the arrays.
     fetchWeather: async () => ({ time: [new Date(Date.now() - 3600000).toISOString().slice(0, 16)] }),
     fetchFlood: async () => [],
-  });
+  }));
   assert.equal(result.puddles.length, 1);
   assert.equal(result.puddles[0].statusKey, 'unknown');
   assert.equal(result.defects.length, 1);
@@ -72,12 +76,12 @@ test('gatherSurvey: weather that resolves but cannot be summarized still yields 
 
 test('gatherSurvey: a failure while processing complaints is reported, not swallowed', async () => {
   const { gatherSurvey } = await import('../js/app.js');
-  const result = await gatherSurvey({ lat: 0, lon: 0 }, new Date(), {
+  const result = await gatherSurvey({ lat: 0, lon: 0 }, new Date(), cityWith({
     fetchSheds: async () => [facts.shed],
     fetchComplaints: async () => ({ puddles: null, defects: null }), // malformed → throws while scoring
     fetchWeather: async () => { throw new Error('down'); },
     fetchFlood: async () => [],
-  });
+  }));
   assert.equal(result.sheds.length, 1);
   assert.equal(result.errors.P, true);
   assert.equal(result.errors.D, true);
@@ -86,12 +90,12 @@ test('gatherSurvey: a failure while processing complaints is reported, not swall
 test('gatherSurvey: source rejections mark only their layers', async () => {
   const { gatherSurvey } = await import('../js/app.js');
   let shedsSeen = null;
-  const result = await gatherSurvey({ lat: 0, lon: 0 }, new Date(), {
+  const result = await gatherSurvey({ lat: 0, lon: 0 }, new Date(), cityWith({
     fetchSheds: async () => { throw new Error('429'); },
     fetchComplaints: async () => ({ puddles: [facts.puddle], defects: [] }),
     fetchWeather: async () => { throw new Error('down'); },
     fetchFlood: async () => [],
-  }, (s) => { shedsSeen = s; });
+  }), (s) => { shedsSeen = s; });
   assert.equal(shedsSeen, null);
   assert.deepEqual(result.errors, { S: true });
   assert.equal(result.puddles.length, 1);
@@ -102,12 +106,12 @@ test('gatherSurvey hands its cancellation signal to every source', async () => {
   const signal = new AbortController().signal;
   const seen = [];
   const spy = (value) => async (at, a, b) => { seen.push((b ?? a)?.signal === signal); return value; };
-  await gatherSurvey({ lat: 0, lon: 0 }, new Date(), {
+  await gatherSurvey({ lat: 0, lon: 0 }, new Date(), cityWith({
     fetchSheds: spy([]),
     fetchComplaints: spy({ puddles: [], defects: [] }),
     fetchWeather: spy({ time: [], precipitation: [], et0_fao_evapotranspiration: [] }),
     fetchFlood: spy([]),
-  }, undefined, signal);
+  }), undefined, signal);
   assert.deepEqual(seen, [true, true, true, true]);
 });
 
@@ -121,12 +125,12 @@ const away = { lat: 0.002, lon: 0, deep: false }; // ~220 m away
 
 const floodSurvey = async (rainMm, fetchFlood) => {
   const { gatherSurvey } = await import('../js/app.js');
-  return gatherSurvey({ lat: 0, lon: 0 }, new Date(), {
+  return gatherSurvey({ lat: 0, lon: 0 }, new Date(), cityWith({
     fetchSheds: async () => [],
     fetchComplaints: async () => ({ puddles: [facts.puddle], defects: [] }),
     fetchWeather: async () => hourlyRain(rainMm),
     fetchFlood,
-  });
+  }));
 };
 
 test('gatherSurvey: flood spots mark nearby complaint puddles and add wet flood-only puddles', async () => {
@@ -150,4 +154,16 @@ test('gatherSurvey: a failed flood layer leaves complaint puddles, unmarked, wit
   const result = await floodSurvey(10, async () => { throw new Error('404'); });
   assert.deepEqual(result.errors, {});
   assert.deepEqual(result.puddles.map((p) => [p.id, p.floodProne]), [['p', false]]);
+});
+
+test('gatherSurvey counts the mayors of the surveyed city', async () => {
+  const { gatherSurvey } = await import('../js/app.js');
+  const city = { ...cityWith({
+    fetchSheds: async () => [{ ...facts.shed, chainStart: new Date('2020-01-01T00:00:00Z') }],
+    fetchComplaints: async () => ({ puddles: [], defects: [] }),
+    fetchWeather: async () => { throw new Error('down'); },
+    fetchFlood: async () => [],
+  }), mayorTermStarts: ['2021-06-01', '2024-06-01'] };
+  const result = await gatherSurvey({ lat: 0, lon: 0 }, new Date('2026-11-06T00:00:00Z'), city);
+  assert.equal(result.sheds[0].mayorsOutlasted, 2);
 });

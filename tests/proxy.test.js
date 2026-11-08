@@ -77,3 +77,21 @@ test('works without a token (no header sent)', async () => {
   await handleSocrata(req('dataset=erm2-nwe9'), { token: '', fetchImpl: u.impl });
   assert.equal(u.calls[0].init.headers['X-App-Token'], undefined);
 });
+
+test('city=nyc forwards to NYC Open Data; a missing city still means New York', async () => {
+  for (const qs of ['city=nyc&dataset=erm2-nwe9', 'dataset=erm2-nwe9']) {
+    const u = upstream([]);
+    assert.equal((await handleSocrata(req(qs), { token: 't', fetchImpl: u.impl })).status, 200, qs);
+    assert.match(u.calls[0].url, /^https:\/\/data\.cityofnewyork\.us\/resource\/erm2-nwe9\.json/, qs);
+    assert.doesNotMatch(u.calls[0].url, /city=/, `${qs}: city is ours, not Socrata's`);
+  }
+});
+
+test('rejects unknown cities', async () => {
+  const u = upstream([]);
+  for (const city of ['atlantis', '__proto__', 'toString', '']) {
+    const res = await handleSocrata(req(`city=${city}&dataset=erm2-nwe9`), { token: 't', fetchImpl: u.impl });
+    assert.equal(res.status, 400, city);
+  }
+  assert.equal(u.calls.length, 0);
+});

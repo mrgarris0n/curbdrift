@@ -1,10 +1,8 @@
 // Orchestration: locate → survey → render; tap the map to survey somewhere else.
-import { RADIUS_M, DEFAULT_CENTER } from './config.js';
-import { resolveStart } from './geo.js';
-import { fetchSheds } from './sources/sheds.js';
-import { fetchComplaints } from './sources/complaints.js';
-import { fetchWeather, summarizeWeather } from './sources/weather.js';
-import { fetchFlood, mergeFloodSpots } from './sources/flood.js';
+import { RADIUS_M } from './config.js';
+import { DEFAULT_CITY, cityAt, resolveStart } from './cities.js';
+import { summarizeWeather } from './sources/weather.js';
+import { mergeFloodSpots } from './sources/flood.js';
 import { scoreShed, scorePuddle, scoreDefect, areaRating } from './scoring.js';
 import { THEMES, pickTheme } from './themes/index.js';
 import { createMap } from './map.js';
@@ -72,11 +70,12 @@ export function locate(geolocation, timeoutMs = GEO_TIMEOUT_MS, onLate = () => {
  * *or processing* a layer marks it in `errors` rather than silently emptying it.
  * onSheds(scored) fires as soon as scaffolding is ready (it is the fast query).
  */
-export async function gatherSurvey(at, today, sources = { fetchSheds, fetchComplaints, fetchWeather, fetchFlood }, onSheds = () => {}, signal = undefined) {
+export async function gatherSurvey(at, today, city = DEFAULT_CITY, onSheds = () => {}, signal = undefined) {
+  const { sources } = city;
   const result = { sheds: [], puddles: [], defects: [], errors: {} };
 
   const shedsDone = sources.fetchSheds(at, RADIUS_M, { signal })
-    .then((facts) => { result.sheds = facts.map((f) => scoreShed(f, today)); onSheds(result.sheds); })
+    .then((facts) => { result.sheds = facts.map((f) => scoreShed(f, today, city.mayorTermStarts)); onSheds(result.sheds); })
     .catch((err) => { result.errors.S = true; console.warn('sheds', err); });
 
   // Weather is optional: any failure (network or malformed data) means "unknown" saturation.
@@ -140,7 +139,7 @@ async function main() {
   const panelHeight = () => document.getElementById('summary').offsetHeight;
   // The map shows immediately; the survey waits for a location (or the fallback).
   // Browsing the map never fetches: moving it only offers a re-survey button.
-  const map = createMap(document.getElementById('map'), DEFAULT_CENTER, {
+  const map = createMap(document.getElementById('map'), DEFAULT_CITY.defaultCenter, {
     onMapTap: () => { closeSheet(); map.select(null); },
     // The user chose this view: survey its center and leave zoom/position alone.
     onUserMove: () => showResurvey(theme, () => {
@@ -209,7 +208,8 @@ async function main() {
     };
     show({}, true);
 
-    gatherSurvey(at, today, undefined, (sheds) => { if (current()) show({ sheds }, true); }, controller.signal)
+    // Each survey uses the city it lands in; outside every city it falls back to the default.
+    gatherSurvey(at, today, cityAt(at) ?? DEFAULT_CITY, (sheds) => { if (current()) show({ sheds }, true); }, controller.signal)
       .then((result) => { if (current()) show(result, false); })
       .finally(() => { if (inFlight === controller) inFlight = null; });
   }
