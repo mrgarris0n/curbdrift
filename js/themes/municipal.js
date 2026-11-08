@@ -26,6 +26,12 @@ const workTypeName = {
   'Sidewalk Shed': 'SIDEWALK SHED',
   'Supported Scaffold': 'SUPPORTED SCAFFOLD',
   'Suspended Scaffold': 'SUSPENDED SCAFFOLD',
+  Scaffold: 'SCAFFOLD',
+};
+
+// Chicago's 311 names the request, not the condition.
+const defectName = {
+  'Sidewalk Inspection Request': 'SIDEWALK INSPECTION REQUESTED',
 };
 
 function shedRows(s) {
@@ -37,7 +43,7 @@ function shedRows(s) {
     { label: 'Permit renewals', value: String(s.renewals) },
     { label: 'Mayors outlasted', value: String(s.mayorsOutlasted) },
     { label: 'Current permit expires', value: day(s.latestExpiry) },
-    { label: 'Owner of record', value: orNone(s.owner) },
+    { label: 'Owner of record', value: s.ownerWithheld ? 'WITHHELD (PRIVATE INDIVIDUAL)' : orNone(s.owner) },
     { label: 'Contractor', value: orNone(s.contractor) },
     { label: 'Classification', value: shedClass[s.classKey] },
   ];
@@ -63,7 +69,7 @@ function puddleRows(p) {
 
 function defectRows(d) {
   return [
-    { label: 'Condition reported', value: d.descriptor.toUpperCase() },
+    { label: 'Condition reported', value: defectName[d.descriptor] ?? d.descriptor.toUpperCase() },
     { label: 'Date reported', value: day(d.created) },
     { label: 'Location', value: orNone(d.address) },
     { label: '311 status', value: d.closed ? 'CLOSED' : 'OPEN' },

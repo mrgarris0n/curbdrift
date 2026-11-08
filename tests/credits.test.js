@@ -11,7 +11,7 @@ test('credits name the developer, the repo and the inspirations', () => {
 
 test('credits list every data source the app uses, each with an https link', () => {
   const urls = CREDITS.sources.map((s) => s.url).join(' ');
-  for (const needle of ['rbx6-tga4', 'erm2-nwe9', '9i7c-xyvv', 'open-meteo.com', 'openstreetmap.org/copyright']) assert.ok(urls.includes(needle), needle);
+  for (const needle of ['rbx6-tga4', 'erm2-nwe9', '9i7c-xyvv', 'ydr8-5enu', 'v6vf-nfxy', 'open-meteo.com', 'openstreetmap.org/copyright']) assert.ok(urls.includes(needle), needle);
   for (const s of CREDITS.sources) {
     assert.ok(s.name && s.provider, JSON.stringify(s));
     assert.match(s.url, /^https:\/\//);
@@ -31,7 +31,7 @@ for (const theme of Object.values(THEMES)) {
 }
 
 test('credits disclaim any affiliation with or endorsement by the City of New York', () => {
-  assert.match(CREDITS.disclaimer, /not affiliated with, endorsed by, or sponsored by the City of New York/);
+  assert.match(CREDITS.disclaimer, /not affiliated with, endorsed by, or sponsored by the City of New York, the City of Chicago/);
 });
 
 test('credits include the walking router', () => {

@@ -24,7 +24,10 @@ const defects = [false, true].map((closed, i) => ({
   created: new Date('2026-09-01T00:00:00Z'), closed, score: 70, code: `D-${i + 1}`,
 }));
 const sheds = ['temporary', 'prolonged', 'semiPermanent', 'permanent'].map((classKey) => ({ ...shed, classKey }));
-const items = [...sheds, ...puddles, floodPuddle, floodOnly, ...defects];
+// Chicago: a scaffold whose owner is a private person, and a sidewalk inspection request.
+const chicagoShed = { ...shed, id: 'c', address: '1600 N MILWAUKEE AVE', workType: 'Scaffold', owner: '', ownerWithheld: true, contractor: 'LOOP SCAFFOLD CO', code: 'S-5' };
+const chicagoDefect = { ...defects[0], id: 'cd', descriptor: 'Sidewalk Inspection Request', address: '1400 N MILWAUKEE AVE', code: 'D-3' };
+const items = [...sheds, chicagoShed, ...puddles, floodPuddle, floodOnly, ...defects, chicagoDefect];
 const route = { stops: [{ ...shed, legM: 130, atM: 130 }, { ...defects[0], legM: 200, atM: 330 }], distanceM: 512.6, minutes: 6, totalScore: 162.1 };
 
 const MESSAGE_KEYS = ['loading', 'empty', 'unavailable', 'defaultLocation', 'provisional', 'final', 'tapHint', 'resurvey',
@@ -89,6 +92,16 @@ for (const theme of Object.values(THEMES)) {
     assert.match(text(floodOnly), /4 in/i, `${theme.id} gives the shallow depth class`);
     assert.ok(theme.itemTitle(floodOnly).includes('P-6'));
     for (const r of theme.recordRows(floodOnly)) assert.doesNotMatch(r.value, /undefined|null|NaN|Invalid/, `${theme.id} ${r.label}`);
+  });
+
+  test(`${theme.id}: Chicago wording: scaffolds, withheld owners, inspection requests`, () => {
+    const shedText = strings(theme.recordRows(chicagoShed)).join(' ');
+    assert.match(shedText, /scaffold/i);
+    assert.doesNotMatch(shedText, /not on file|nobody wrote it down/i, `${theme.id} does not call a withheld owner missing`);
+    assert.match(shedText, /withheld|private/i, `${theme.id} says the owner is withheld`);
+    const defectText = strings(theme.recordRows(chicagoDefect)).join(' ');
+    assert.match(defectText, /inspect/i);
+    assert.doesNotMatch(defectText, /\bSidewalk Inspection Request\b/i, `${theme.id} does not show the raw request type`);
   });
 
   test(`${theme.id}: route rows list stops in order, then the return`, () => {
