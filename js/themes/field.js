@@ -156,6 +156,7 @@ export const field = {
 
   messages: {
     loading: ['Looking around…', 'Asking the Department of Buildings…', 'Reading old complaints…', 'Checking whether it rained…'],
+    slow: 'The city is slow to answer today. We are still waiting; it usually comes.',
     empty: 'Nothing nearby has been left alone long enough. That is unusual.',
     unavailable: 'The city is not answering right now. Try again in a moment.',
     defaultLocation: 'We do not know where you are, so we started at Union Square.',
