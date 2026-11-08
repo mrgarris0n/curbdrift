@@ -12,7 +12,9 @@ const CITIES = {
 const DEFAULT_CITY = 'nyc';
 const PARAMS = ['$select', '$where', '$limit'];
 const MAX_LIMIT = 10000;
-const TIMEOUT_MS = 25000;
+// Socrata can take over 80 s on a query it hasn't cached (62.5 s and 80.4 s measured); giving up
+// sooner showed layers as unavailable while it finished and cached the answer anyway.
+export const UPSTREAM_TIMEOUT_MS = 90000;
 
 function json(body, status, cache = 'no-store') {
   return new Response(JSON.stringify(body), {
@@ -43,7 +45,7 @@ export async function handleSocrata(request, { token = process.env.SOCRATA_APP_T
 
   let upstream;
   try {
-    upstream = await fetchImpl(`${city.upstream}${dataset}.json?${forward}`, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    upstream = await fetchImpl(`${city.upstream}${dataset}.json?${forward}`, { headers, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
   } catch {
     return json({ message: 'records office unreachable' }, 502);
   }
