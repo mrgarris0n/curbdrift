@@ -11,7 +11,9 @@ storm, and reports:
   3. flood odds by peak intensity, and the intensity reference R in min(peak / R, 1) that
      ranks storms best inside the app's wetness = max(min(total / 20, 1), min(peak / R, 1));
   4. how often sensors off DEP's flood map flood, relative to those on it, at equal storm
-     intensity (the susceptibility factor), with a by-sensor bootstrap interval.
+     intensity (the susceptibility factor), with a by-sensor bootstrap interval;
+  5. for each 311 puddle descriptor, how much its complaints concentrate on rain days, which
+     gives DESCRIPTOR_WEIGHT (Central Park rain, Nov 2025 to Nov 2026, citywide 311 counts).
 
 What it cannot check: FloodNet floods drain in about half an hour, so it says nothing about how
 long a puddle lingers (the drying term and the burst's 24 h decay) or about puddles left by
@@ -43,6 +45,11 @@ CLUSTER_M = 30  # js/sources/complaints.js
 RAIN_HOUR_MM = 0.2  # js/sources/weather.js
 STORM_GAP_H = 3
 BANDS = [0.2, 1, 2.5, 5, 7.6, 10, 15, 25, float('inf')]
+DESC_START, DESC_END = '2025-11-01', '2026-11-01'  # one year of 311 puddle complaints
+PUDDLE_DESCRIPTORS = [  # js/sources/complaints.js
+    'Catch Basin Clogged/Flooding (Use Comments) (SC)', 'Street Flooding (SJ)', 'Flooding on Street', 'Catch Basin Clogged',
+    'Catch Basin Sunken/Damaged/Raised (SC1)', 'Catch Basin Sunken', 'Catch Basin Grating Missing (SA4)',
+]
 
 
 def get_json(url, tries=5):
@@ -181,6 +188,37 @@ def main():
             for _ in range(300)]
     print(f'\n4. Off-map vs on-map flood rate at equal storm peak: {rr:.2f} '
           f'(95% interval resampling sensors: {np.percentile(boot, 2.5):.2f}–{np.percentile(boot, 97.5):.2f})')
+
+    descriptor_weights()
+
+
+def descriptor_weights():
+    """Share of each descriptor's complaints filed on a rain day (≥ 2 mm that day or the day before)."""
+    quoted = ','.join("'" + d.replace("'", "''") + "'" for d in PUDDLE_DESCRIPTORS)
+    q = urllib.parse.urlencode({
+        '$select': 'date_trunc_ymd(created_date) as day, descriptor, count(*) as n',
+        '$where': f"created_date >= '{DESC_START}' AND created_date < '{DESC_END}' AND complaint_type in('Sewer','Sewer Maintenance') AND descriptor in({quoted})",
+        '$group': 'day, descriptor', '$limit': 50000,
+    })
+    counts = cached(f'311-daily-{DESC_START}-{DESC_END}.json', lambda: get_json(f'https://data.cityofnewyork.us/resource/erm2-nwe9.json?{q}'))
+    w = urllib.parse.urlencode({'latitude': 40.7812, 'longitude': -73.9665, 'start_date': '2025-10-31', 'end_date': DESC_END,
+                                'daily': 'precipitation_sum', 'timezone': 'America/New_York'})
+    daily = cached(f'rain-central-park-{DESC_START}-{DESC_END}.json', lambda: get_json(f'https://archive-api.open-meteo.com/v1/archive?{w}'))['daily']
+    rain = {d: (v or 0) for d, v in zip(daily['time'], daily['precipitation_sum'])}
+    days = list(rain)
+    wet = {d: rain[d] >= 2 or rain[days[i - 1]] >= 2 for i, d in enumerate(days) if i}
+    base = np.mean([wet[d] for d in wet if d < DESC_END])
+    n, on_rain = defaultdict(int), defaultdict(int)
+    for r in counts:
+        day = r['day'][:10]
+        n[r['descriptor']] += int(r['n'])
+        on_rain[r['descriptor']] += int(r['n']) * wet[day]
+    triggered = {d: max(0.0, (on_rain[d] / n[d] - base) / (1 - base)) for d in n}
+    top = max(triggered.values())
+    print(f'\n5. Rain days (≥ 2 mm that day or the day before): {base:.0%} of days, {DESC_START} to {DESC_END}')
+    print(f'   {"descriptor":50} {"complaints":>10} {"on rain days":>13} {"weight":>7}')
+    for d in sorted(n, key=lambda d: -triggered[d]):
+        print(f'   {d:50} {n[d]:10d} {on_rain[d] / n[d]:12.0%} {triggered[d] / top:7.2f}')
 
 
 if __name__ == '__main__':

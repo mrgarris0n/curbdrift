@@ -19,7 +19,8 @@
  *     susceptibility = floodProne ? 1 : 0.8   (on DEP's stormwater flood map or not. FloodNet sensors
  *                                             off the map flood 0.78× as often as those on it, at equal
  *                                             storm intensity: scripts/calibrate-puddles.py)
- *     repeat         = min(complaintCount, 5) / 5
+ *     weighted       = Σ complaints × DESCRIPTOR_WEIGHT[descriptor]
+ *     repeat         = min(weighted, 5) / 5
  *     saturation     = 100 × wetness × susceptibility × (0.5 + 0.5 × repeat)
  *     The burst lets a short downpour outrun the drains even when the 72h total is modest or
  *     already offset by sun; it fades over about a day, independently of drying.
@@ -74,15 +75,32 @@ export function areaRating(scoredItems) {
 
 const HEAVY_RAIN_MM_H = 7.6;
 
-/** facts: {complaintCount, floodProne}. */
-export function saturationIndex({ complaintCount, floodProne }, weather) {
+/**
+ * How much one complaint of each kind says about pooling water: the share of that descriptor's
+ * complaints that rain triggered, (share on rain days − 0.48) / 0.52 over Nov 2025–Nov 2026,
+ * scaled so the most rain-driven is 1. Sunken, damaged or missing basins are reported whatever
+ * the weather, so they say little. Reproduce with scripts/calibrate-puddles.py.
+ */
+export const DESCRIPTOR_WEIGHT = Object.freeze({
+  'Flooding on Street': 1,
+  'Street Flooding (SJ)': 0.8,
+  'Catch Basin Clogged': 0.7,
+  'Catch Basin Clogged/Flooding (Use Comments) (SC)': 0.5,
+  'Catch Basin Sunken': 0.2,
+  'Catch Basin Grating Missing (SA4)': 0.2,
+  'Catch Basin Sunken/Damaged/Raised (SC1)': 0,
+});
+
+/** facts: {byDescriptor, floodProne}. */
+export function saturationIndex({ byDescriptor, floodProne }, weather) {
   if (!weather) return null;
   const tempFactor = 1 + Math.max(0, weather.meanTempC) / 25;
   const effectiveWater = Math.max(0, weather.rain72hMm - 1.2 * weather.dryingKWh * tempFactor);
   const intensity = Math.min((weather.peakHourMm72h ?? 0) / HEAVY_RAIN_MM_H, 1);
   const burst = weather.hoursSincePeak == null ? 0 : intensity * Math.exp(-weather.hoursSincePeak / 24);
   const wetness = Math.max(Math.min(effectiveWater / 20, 1), burst);
-  const repeat = Math.min(complaintCount, 5) / 5;
+  const weighted = Object.entries(byDescriptor).reduce((sum, [d, n]) => sum + n * DESCRIPTOR_WEIGHT[d], 0);
+  const repeat = Math.min(weighted, 5) / 5;
   const susceptibility = floodProne ? 1 : 0.8;
   return round(100 * wetness * susceptibility * (0.5 + 0.5 * repeat), 2);
 }

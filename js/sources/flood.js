@@ -53,7 +53,7 @@ export function mergeFloodSpots(clusters, spots) {
     ...merged,
     ...kept.map((s) => ({
       kind: 'P', id: `F|${s.lat.toFixed(5)},${s.lon.toFixed(5)}`, lat: s.lat, lon: s.lon,
-      complaintCount: 0, lastComplaint: null, descriptors: [], floodProne: true, floodDepth: s.deep ? 'deep' : 'nuisance',
+      complaintCount: 0, lastComplaint: null, descriptors: [], byDescriptor: {}, floodProne: true, floodDepth: s.deep ? 'deep' : 'nuisance',
     })),
   ];
 }

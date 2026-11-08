@@ -33,7 +33,7 @@ const PUDDLE_SET = new Set(PUDDLE_DESCRIPTORS);
 const DEFECT_SET = new Set(DEFECT_DESCRIPTORS);
 
 /** @typedef {{kind:'P', id:string, lat:number, lon:number, complaintCount:number,
- *   lastComplaint:Date, descriptors:string[]}} PuddleFacts */
+ *   lastComplaint:Date, descriptors:string[], byDescriptor:Object<string, number>}} PuddleFacts */
 /** @typedef {{kind:'D', id:string, lat:number, lon:number, address:string, descriptor:string,
  *   created:Date, closed:boolean}} DefectFacts */
 
@@ -72,8 +72,9 @@ export function splitComplaints(rows, today) {
         c.complaintCount += 1;
         if (created > c.lastComplaint) c.lastComplaint = created;
         if (!c.descriptors.includes(r.descriptor)) c.descriptors.push(r.descriptor);
+        c.byDescriptor[r.descriptor] = (c.byDescriptor[r.descriptor] ?? 0) + 1;
       } else {
-        clusters.push({ kind: 'P', id: `P|${r.unique_key}`, lat, lon, complaintCount: 1, lastComplaint: created, descriptors: [r.descriptor] });
+        clusters.push({ kind: 'P', id: `P|${r.unique_key}`, lat, lon, complaintCount: 1, lastComplaint: created, descriptors: [r.descriptor], byDescriptor: { [r.descriptor]: 1 } });
       }
     } else if (r.complaint_type === 'Sidewalk Condition' && DEFECT_SET.has(r.descriptor)) {
       if (created < defectSince) continue;

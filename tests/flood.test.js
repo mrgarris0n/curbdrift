@@ -63,7 +63,7 @@ test('a flood spot with no complaints becomes its own puddle with a stable id', 
   const out = mergeFloodSpots([], [{ lat: 40.712346, lon: -73.954321, deep: false }]);
   assert.deepEqual(out, [{
     kind: 'P', id: 'F|40.71235,-73.95432', lat: 40.712346, lon: -73.954321,
-    complaintCount: 0, lastComplaint: null, descriptors: [], floodProne: true, floodDepth: 'nuisance',
+    complaintCount: 0, lastComplaint: null, descriptors: [], byDescriptor: {}, floodProne: true, floodDepth: 'nuisance',
   }]);
 });
 

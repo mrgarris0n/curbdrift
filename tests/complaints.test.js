@@ -42,6 +42,13 @@ test('clusters within 30m', () => {
   const pair = puddles.find((p) => p.complaintCount === 2);
   assert.equal(pair.lastComplaint.toISOString().slice(0, 10), '2026-10-10');
   assert.deepEqual(pair.descriptors.sort(), ['Catch Basin Clogged', 'Street Flooding (SJ)']);
+  assert.deepEqual(pair.byDescriptor, { 'Street Flooding (SJ)': 1, 'Catch Basin Clogged': 1 });
+});
+
+test('clusters count repeat complaints per descriptor', () => {
+  const rows = ['2026-10-01', '2026-10-05'].map((d) => row('Sewer', 'Street Flooding (SJ)', d));
+  const { puddles } = splitComplaints(rows, TODAY);
+  assert.deepEqual(puddles[0].byDescriptor, { 'Street Flooding (SJ)': 2 });
 });
 
 test('rows without coordinates skipped', () => {

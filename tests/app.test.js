@@ -51,7 +51,7 @@ test('locate does not call onLate when the fix arrives in time', async () => {
 
 const facts = {
   shed: { kind: 'S', id: 's', lat: 0, lon: 0, chainStart: new Date('2020-01-01T00:00:00Z') },
-  puddle: { kind: 'P', id: 'p', lat: 0, lon: 0, complaintCount: 2, lastComplaint: new Date(), descriptors: [] },
+  puddle: { kind: 'P', id: 'p', lat: 0, lon: 0, complaintCount: 2, lastComplaint: new Date(), descriptors: ['Street Flooding (SJ)'], byDescriptor: { 'Street Flooding (SJ)': 2 } },
   defect: { kind: 'D', id: 'd', lat: 0, lon: 0, descriptor: 'Broken Sidewalk', closed: false },
 };
 
