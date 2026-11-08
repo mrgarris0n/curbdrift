@@ -13,11 +13,16 @@ storm, and reports:
   4. how often sensors off DEP's flood map flood, relative to those on it, at equal storm
      intensity (the susceptibility factor), with a by-sensor bootstrap interval;
   5. for each 311 puddle descriptor, how much its complaints concentrate on rain days, which
-     gives DESCRIPTOR_WEIGHT (Central Park rain, Nov 2025 to Nov 2026, citywide 311 counts).
+     gives DESCRIPTOR_WEIGHT (Central Park rain, Nov 2025 to Nov 2026, citywide 311 counts);
+  6. the drying term: evaporation as 1.05 × FAO-56 reference evapotranspiration (ET0), against
+     the earlier sunshine-and-temperature guess and the energy limit (all sunshine evaporating
+     water, 0.68 kWh/m² per mm), day by day at Central Park.
 
 What it cannot check: FloodNet floods drain in about half an hour, so it says nothing about how
 long a puddle lingers (the drying term and the burst's 24 h decay) or about puddles left by
-drizzle that never floods a street (the 20 mm total scale).
+drizzle that never floods a street (the 20 mm total scale). Its storm-level check (3) uses rain
+totals and peaks only, so changing the drying term cannot move it. The drying term rests on
+physics instead (6).
 
     python3 -m venv ~/.cache/curbdrift-flood && ~/.cache/curbdrift-flood/bin/pip install numpy
     ~/.cache/curbdrift-flood/bin/python scripts/calibrate-puddles.py
@@ -190,6 +195,7 @@ def main():
           f'(95% interval resampling sensors: {np.percentile(boot, 2.5):.2f}–{np.percentile(boot, 97.5):.2f})')
 
     descriptor_weights()
+    drying()
 
 
 def descriptor_weights():
@@ -219,6 +225,32 @@ def descriptor_weights():
     print(f'   {"descriptor":50} {"complaints":>10} {"on rain days":>13} {"weight":>7}')
     for d in sorted(n, key=lambda d: -triggered[d]):
         print(f'   {d:50} {n[d]:10d} {on_rain[d] / n[d]:12.0%} {triggered[d] / top:7.2f}')
+
+
+def drying():
+    """Old vs new drying per day at Central Park, from the archived forecasts the app reads."""
+    q = urllib.parse.urlencode({'latitude': 40.7812, 'longitude': -73.9665, 'start_date': '2023-06-01', 'end_date': '2026-10-31',
+                                'hourly': 'shortwave_radiation,temperature_2m,et0_fao_evapotranspiration', 'timezone': 'America/New_York'})
+    h = cached('drying-central-park-2023-06-01-2026-10-31.json', lambda: get_json(f'https://historical-forecast-api.open-meteo.com/v1/forecast?{q}'))['hourly']
+    by_day = defaultdict(lambda: {'sw': 0.0, 't': [], 'e': 0.0})
+    for t, sw, temp, e in zip(h['time'], h['shortwave_radiation'], h['temperature_2m'], h['et0_fao_evapotranspiration']):
+        d = by_day[t[:10]]
+        d['sw'] += sw or 0
+        d['e'] += e or 0
+        if temp is not None:
+            d['t'].append(temp)
+    seasons = {'Dec–Feb': (12, 1, 2), 'Mar–May': (3, 4, 5), 'Jun–Aug': (6, 7, 8), 'Sep–Nov': (9, 10, 11)}
+    rows = []
+    for day, d in by_day.items():
+        kwh = d['sw'] / 1000
+        old = 1.2 * kwh * (1 + max(0.0, float(np.mean(d['t']))) / 25)
+        rows.append((int(day[5:7]), old, 1.05 * d['e'], kwh / 0.68))
+    rows = np.array(rows)
+    print('\n6. Drying, mm/day at Central Park (old: 1.2 × kWh × (1 + T/25); new: 1.05 × ET0)')
+    print(f'   {"season":8} {"old":>6} {"new":>6} {"old/new":>8} {"old beyond energy limit":>24}')
+    for name, months in [*seasons.items(), ('all', tuple(range(1, 13)))]:
+        r = rows[np.isin(rows[:, 0], months)]
+        print(f'   {name:8} {np.median(r[:, 1]):6.2f} {np.median(r[:, 2]):6.2f} {np.median(r[:, 1] / np.maximum(r[:, 2], 1e-6)):8.2f} {np.mean(r[:, 1] > r[:, 3]):23.0%}')
 
 
 if __name__ == '__main__':

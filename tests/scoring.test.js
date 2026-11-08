@@ -50,33 +50,33 @@ test('saturationIndex without weather is unknown', async () => {
 
 test('saturationIndex: dry week is dormant', async () => {
   const { saturationIndex, puddleStatus } = await import('../js/scoring.js');
-  const s = saturationIndex({ ...filed(5), floodProne: true }, { rain72hMm: 0, dryingKWh: 0, meanTempC: 10 });
+  const s = saturationIndex({ ...filed(5), floodProne: true }, { rain72hMm: 0, evaporationMm: 0 });
   assert.equal(s, 0);
   assert.equal(puddleStatus(s), 'dormant');
 });
 
 test('saturationIndex: heavy rain at repeat offender is peak', async () => {
   const { saturationIndex, puddleStatus } = await import('../js/scoring.js');
-  const s = saturationIndex({ ...filed(5), floodProne: true }, { rain72hMm: 30, dryingKWh: 0, meanTempC: 10 });
+  const s = saturationIndex({ ...filed(5), floodProne: true }, { rain72hMm: 30, evaporationMm: 0 });
   assert.equal(s, 100);
   assert.equal(puddleStatus(s), 'peak');
 });
 
 test('saturationIndex: single complaint after moderate rain is probable', async () => {
   const { saturationIndex, puddleStatus } = await import('../js/scoring.js');
-  const s = saturationIndex({ ...filed(1), floodProne: true }, { rain72hMm: 10, dryingKWh: 0, meanTempC: 10 });
+  const s = saturationIndex({ ...filed(1), floodProne: true }, { rain72hMm: 10, evaporationMm: 0 });
   assert.equal(s, 30);
   assert.equal(puddleStatus(s), 'probable');
 });
 
-test('saturationIndex: sun dries it out', async () => {
+test('saturationIndex: evaporation dries it out', async () => {
   const { saturationIndex } = await import('../js/scoring.js');
-  assert.equal(saturationIndex({ ...filed(5), floodProne: true }, { rain72hMm: 10, dryingKWh: 10, meanTempC: 10 }), 0);
+  assert.equal(saturationIndex({ ...filed(5), floodProne: true }, { rain72hMm: 10, evaporationMm: 10 }), 0);
 });
 
 test('scorePuddle uses saturation as score, 0 when unknown', async () => {
   const { scorePuddle } = await import('../js/scoring.js');
-  assert.equal(scorePuddle({ ...filed(5), floodProne: true }, { rain72hMm: 30, dryingKWh: 0, meanTempC: 10 }).score, 100);
+  assert.equal(scorePuddle({ ...filed(5), floodProne: true }, { rain72hMm: 30, evaporationMm: 0 }).score, 100);
   const u = scorePuddle({ ...filed(5), floodProne: true }, null);
   assert.equal(u.score, 0);
   assert.equal(u.statusKey, 'unknown');
@@ -91,41 +91,41 @@ test('scoreDefect', async () => {
   assert.equal(scoreDefect({ descriptor: 'Cellar Door Open/Unprotected', closed: true }).score, 40);
 });
 
-// Rain-intensity (burst) term. A November day of sun is roughly 2–3 kWh/m².
+// Rain-intensity (burst) term. ET0 in NYC is about 1 mm/day in November and 5–6 mm/day in July.
 test('saturationIndex: no rain with peak fields is 0', async () => {
   const { saturationIndex } = await import('../js/scoring.js');
-  assert.equal(saturationIndex({ ...filed(5), floodProne: true }, { rain72hMm: 0, peakHourMm72h: 0, hoursSincePeak: null, dryingKWh: 0, meanTempC: 10 }), 0);
+  assert.equal(saturationIndex({ ...filed(5), floodProne: true }, { rain72hMm: 0, peakHourMm72h: 0, hoursSincePeak: null, evaporationMm: 0 }), 0);
 });
 
 test('saturationIndex: heavy one-hour burst 2h ago is at least probable', async () => {
   const { saturationIndex, puddleStatus } = await import('../js/scoring.js');
-  const s = saturationIndex({ ...filed(1), floodProne: true }, { rain72hMm: 10, peakHourMm72h: 10, hoursSincePeak: 2, dryingKWh: 0.3, meanTempC: 12 });
+  const s = saturationIndex({ ...filed(1), floodProne: true }, { rain72hMm: 10, peakHourMm72h: 10, hoursSincePeak: 2, evaporationMm: 0.1 });
   assert.notEqual(puddleStatus(s), 'dormant');
   assert.notEqual(puddleStatus(s), 'unknown');
 });
 
-test('saturationIndex: the same burst 3 days ago, after sunny days, is dormant', async () => {
+test('saturationIndex: the same burst 3 days ago, after three summer days, is dormant', async () => {
   const { saturationIndex, puddleStatus } = await import('../js/scoring.js');
-  const s = saturationIndex({ ...filed(1), floodProne: true }, { rain72hMm: 10, peakHourMm72h: 10, hoursSincePeak: 70, dryingKWh: 7, meanTempC: 12 });
+  const s = saturationIndex({ ...filed(1), floodProne: true }, { rain72hMm: 10, peakHourMm72h: 10, hoursSincePeak: 70, evaporationMm: 16 });
   assert.equal(puddleStatus(s), 'dormant');
 });
 
 test('saturationIndex: a drizzle with the same 72h total scores lower than a burst', async () => {
   const { saturationIndex } = await import('../js/scoring.js');
-  const base = { rain72hMm: 10, hoursSincePeak: 2, dryingKWh: 0.3, meanTempC: 12 };
+  const base = { rain72hMm: 10, hoursSincePeak: 2, evaporationMm: 0.1 };
   const drizzle = saturationIndex({ ...filed(1), floodProne: true }, { ...base, peakHourMm72h: 0.5 });
   const burst = saturationIndex({ ...filed(1), floodProne: true }, { ...base, peakHourMm72h: 10 });
   assert.ok(burst > drizzle, `burst ${burst} should beat drizzle ${drizzle}`);
 });
 
-test('saturationIndex: a burst still counts when sun has offset the 72h total', async () => {
+test('saturationIndex: a burst still counts when evaporation has offset the 72h total', async () => {
   const { saturationIndex, puddleStatus } = await import('../js/scoring.js');
-  const s = saturationIndex({ ...filed(3), floodProne: true }, { rain72hMm: 6, peakHourMm72h: 6, hoursSincePeak: 5, dryingKWh: 4, meanTempC: 15 });
+  const s = saturationIndex({ ...filed(3), floodProne: true }, { rain72hMm: 6, peakHourMm72h: 6, hoursSincePeak: 5, evaporationMm: 7 });
   assert.equal(puddleStatus(s), 'probable');
 });
 
 // Flood-map susceptibility.
-const WET = { rain72hMm: 30, dryingKWh: 0, meanTempC: 10 };
+const WET = { rain72hMm: 30, evaporationMm: 0 };
 
 test('saturationIndex: complaint-only spots weigh 0.8 of flood-prone ones (FloodNet calibration)', async () => {
   const { saturationIndex, puddleStatus } = await import('../js/scoring.js');
@@ -143,7 +143,7 @@ test('saturationIndex: a flood-only spot with no complaints tops out at 50', asy
 
 test('saturationIndex: a flood-only spot is dormant on a dry day', async () => {
   const { saturationIndex, puddleStatus } = await import('../js/scoring.js');
-  assert.equal(puddleStatus(saturationIndex({ ...filed(0), floodProne: true }, { rain72hMm: 0, dryingKWh: 0, meanTempC: 10 })), 'dormant');
+  assert.equal(puddleStatus(saturationIndex({ ...filed(0), floodProne: true }, { rain72hMm: 0, evaporationMm: 0 })), 'dormant');
 });
 
 // Complaint weights (rain-triggered share per descriptor, scripts/calibrate-puddles.py).
@@ -166,4 +166,17 @@ test('saturationIndex: complaints count by their weight', async () => {
   const { saturationIndex } = await import('../js/scoring.js');
   // 5 × 0.5 = 2.5 weighted complaints → repeat 0.5 → 100 × 1 × 1 × 0.75
   assert.equal(saturationIndex({ ...filed(5, 'Catch Basin Clogged/Flooding (Use Comments) (SC)'), floodProne: true }, WET), 75);
+});
+
+// Drying is evaporation: 1.05 × ET0 (FAO-56 Table 12, shallow open water).
+test('saturationIndex: evaporation removes 1.05 mm of water per mm of ET0', async () => {
+  const { saturationIndex } = await import('../js/scoring.js');
+  // 20 − 1.05 × 10 = 9.5 mm → wetness 0.475; five full-weight complaints on the flood map → × 1
+  assert.equal(saturationIndex({ ...filed(5), floodProne: true }, { rain72hMm: 20, evaporationMm: 10 }), 47.5);
+});
+
+test('saturationIndex: the same rain a day ago stays wetter in November than in July', async () => {
+  const { saturationIndex } = await import('../js/scoring.js');
+  const day = (evaporationMm) => saturationIndex({ ...filed(2), floodProne: true }, { rain72hMm: 10, evaporationMm });
+  assert.ok(day(1.1) > day(5.5), `November ${day(1.1)} vs July ${day(5.5)}`);
 });
