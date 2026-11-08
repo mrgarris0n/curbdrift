@@ -147,3 +147,7 @@ test('itinerary method row tells estimate from real street route, in both themes
     assert.match(real, /openrouteservice/i, `${theme.id} credits the router`);
   }
 });
+
+test('the field guide cancel button says it drops the walk (it sits apart from the title)', () => {
+  assert.equal(THEMES.field.messages.cancelRoute, 'Never mind the walk');
+});
