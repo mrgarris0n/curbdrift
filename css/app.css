@@ -84,7 +84,7 @@ body {
 }
 .resurvey[hidden] { display: none; }
 
-.route-button { display: block; margin-top: 0.8rem; min-height: 2.6rem; width: 100%; font-weight: 700; }
+.route-button, .route-cancel { display: block; margin-top: 0.8rem; min-height: 2.6rem; width: 100%; font-weight: 700; }
 .rule { border: 0; margin: 0.5rem 0; }
 
 .link-button { display: block; margin: 0.6rem 0 0; padding: 0.4rem 0; min-height: 2.75rem; background: none; border: 0; font: inherit; font-size: 0.75rem; text-decoration: underline; cursor: pointer; color: inherit; }

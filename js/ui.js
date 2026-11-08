@@ -156,7 +156,6 @@ export function openSheet(theme, item, onClose) {
   showSheet(theme.itemTitle(item), theme.messages.close, onClose, [rowsList(theme.recordRows(item)), el('span', 'stamp', theme.stamp(item))]);
 }
 
-/** The walking itinerary file. Its button cancels the itinerary. */
 function link(text, href) {
   const a = el('a', null, text);
   a.href = href;
@@ -193,11 +192,21 @@ export function openCredits(theme, credits) {
     el('p', 'credits-disclaimer', credits.disclaimer)]);
 }
 
+/**
+ * The walking itinerary file. Its close button only hides the file (the walk stays drawn and the
+ * summary offers it again); cancelling the walk is a separate button at the end of the file.
+ */
 export function openRoute(theme, route, onCancel, { focus = true } = {}) {
-  const content = route.stops.length
-    ? [rowsList(theme.routeSummaryRows(route)), el('hr', 'rule'), rowsList(theme.routeStopRows(route)), el('span', 'stamp', theme.routeStamp)]
-    : [el('p', 'status-line', theme.messages.routeEmpty)];
-  showSheet(theme.routeTitle, theme.messages.cancelRoute, onCancel, content, { focus });
+  if (!route.stops.length) {
+    showSheet(theme.routeTitle, theme.messages.close, null, [el('p', 'status-line', theme.messages.routeEmpty)], { focus });
+    return;
+  }
+  const cancel = el('button', 'button route-cancel', theme.messages.cancelRoute);
+  cancel.type = 'button';
+  cancel.addEventListener('click', () => { closeSheet(); onCancel(); });
+  showSheet(theme.routeTitle, theme.messages.close, null, [
+    rowsList(theme.routeSummaryRows(route)), el('hr', 'rule'), rowsList(theme.routeStopRows(route)),
+    el('span', 'stamp', theme.routeStamp), cancel], { focus });
 }
 
 export function closeSheet() {
