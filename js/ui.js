@@ -66,7 +66,7 @@ function setSummaryCollapsed(collapsed) {
 }
 
 /**
- * @param {{counts:{S:number,P:number,D:number}, rating:number, pending:boolean,
+ * @param {{counts:{S:number,P:number,D:number}, rating:number, pending:boolean, slow?:boolean,
  *   errors:{S?:boolean,P?:boolean,D?:boolean}}} state
  */
 export function renderSummary(theme, state) {
@@ -95,7 +95,10 @@ export function renderSummary(theme, state) {
   status.id = 'status-line';
   box.append(status);
   clearInterval(loadingTimer);
-  if (state.pending) {
+  if (state.pending && state.slow) {
+    // The city's records take a while; a steady explanation beats loading lines on a loop.
+    status.textContent = theme.messages.slow;
+  } else if (state.pending) {
     const tick = () => { status.textContent = theme.messages.loading[loadingIndex++ % theme.messages.loading.length]; };
     tick();
     loadingTimer = setInterval(tick, 1600);

@@ -141,6 +141,7 @@ export const municipal = {
 
   messages: {
     loading: ['Retrieving records…', 'Consulting the Department of Buildings…', 'Cross-referencing 311 complaints…', 'Requesting precipitation records…'],
+    slow: 'The records office is experiencing delays. Your request remains in the queue.',
     empty: 'No deterioration on file. This is itself suspicious.',
     unavailable: 'Records office temporarily unavailable. Please re-submit.',
     defaultLocation: 'Applicant location not on file. Survey conducted at default jurisdiction.',

@@ -30,7 +30,7 @@ const chicagoDefect = { ...defects[0], id: 'cd', descriptor: 'Sidewalk Inspectio
 const items = [...sheds, chicagoShed, ...puddles, floodPuddle, floodOnly, ...defects, chicagoDefect];
 const route = { stops: [{ ...shed, legM: 130, atM: 130 }, { ...defects[0], legM: 200, atM: 330 }], distanceM: 512.6, minutes: 6, totalScore: 162.1 };
 
-const MESSAGE_KEYS = ['loading', 'empty', 'unavailable', 'defaultLocation', 'provisional', 'final', 'tapHint', 'resurvey',
+const MESSAGE_KEYS = ['loading', 'slow', 'empty', 'unavailable', 'defaultLocation', 'provisional', 'final', 'tapHint', 'resurvey',
   'routeButton', 'routeShow', 'cancelRoute', 'routeEmpty', 'close', 'summaryTitle', 'switchTo', 'switchToLabel'];
 
 function strings(value, out = []) {

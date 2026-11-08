@@ -23,6 +23,8 @@ function saveThemeId(id) {
 
 let theme = pickTheme(typeof document !== 'undefined' ? loadThemeId() : null);
 const GEO_TIMEOUT_MS = 8000;
+// The city's 311 records can take over a minute on a first query; past this, say so plainly.
+const SLOW_SURVEY_MS = 20000;
 
 /** Give each item a code ("S-1", "P-2"…), numbered within its kind by descending score. */
 export function assignCodes(items, th) {
@@ -164,6 +166,7 @@ async function main() {
     map.setSurveyArea(at, RADIUS_M);
     if (fit) map.fitTo(at, RADIUS_M, panelHeight());
 
+    let slow = false;
     const render = ({ sheds = [], puddles = [], defects = [], errors = {} }, pending) => {
       const items = assignCodes([...sheds, ...puddles, ...defects], theme);
       map.setItems(items, (item) => {
@@ -200,18 +203,19 @@ async function main() {
           })
           .catch((err) => console.warn('walking route', err));
       };
-      renderSummary(theme, { counts, rating: areaRating(items), pending, errors, onRoute, routeActive: Boolean(activeRoute), onCredits });
+      renderSummary(theme, { counts, rating: areaRating(items), pending, slow, errors, onRoute, routeActive: Boolean(activeRoute), onCredits });
     };
     const show = (result, pending) => {
       rerender = () => render(result, pending);
       rerender();
     };
     show({}, true);
+    const slowTimer = setTimeout(() => { if (current()) { slow = true; rerender(); } }, SLOW_SURVEY_MS);
 
     // Each survey uses the city it lands in; outside every city it falls back to the default.
     gatherSurvey(at, today, cityAt(at) ?? DEFAULT_CITY, (sheds) => { if (current()) show({ sheds }, true); }, controller.signal)
       .then((result) => { if (current()) show(result, false); })
-      .finally(() => { if (inFlight === controller) inFlight = null; });
+      .finally(() => { clearTimeout(slowTimer); if (inFlight === controller) inFlight = null; });
   }
 
   function placeUser(center, verified) {
