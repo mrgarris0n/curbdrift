@@ -35,5 +35,6 @@ test('credits disclaim any affiliation with or endorsement by the City of New Yo
 });
 
 test('credits include the walking router', () => {
-  assert.ok(CREDITS.sources.some((s) => s.url.includes('openrouteservice.org')));
+  // Compare the parsed host: a substring match would also accept https://elsewhere.example/openrouteservice.org.
+  assert.ok(CREDITS.sources.some((s) => new URL(s.url).hostname === 'openrouteservice.org'));
 });
