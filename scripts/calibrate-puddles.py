@@ -17,6 +17,9 @@ storm, and reports:
   6. the drying term: evaporation as 1.05 × FAO-56 reference evapotranspiration (ET0), against
      the earlier sunshine-and-temperature guess and the energy limit (all sunshine evaporating
      water, 0.68 kWh/m² per mm), day by day at Central Park.
+  7. 311 flooding complaints around storms, per borough (2023-06 to 2026-10): excess complaints
+     over the dry-weather rate by storm total (backs the 20 mm "fully wet" scale) and by hours
+     since the rain ended (the burst's 24 h fade; reporting delay makes this an upper bound).
 
 What it cannot check: FloodNet floods drain in about half an hour, so it says nothing about how
 long a puddle lingers (the drying term and the burst's 24 h decay) or about puddles left by
@@ -36,7 +39,7 @@ import time
 import urllib.parse
 import urllib.request
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -196,6 +199,7 @@ def main():
 
     descriptor_weights()
     drying()
+    complaints_around_storms()
 
 
 def descriptor_weights():
@@ -251,6 +255,105 @@ def drying():
     for name, months in [*seasons.items(), ('all', tuple(range(1, 13)))]:
         r = rows[np.isin(rows[:, 0], months)]
         print(f'   {name:8} {np.median(r[:, 1]):6.2f} {np.median(r[:, 2]):6.2f} {np.median(r[:, 1] / np.maximum(r[:, 2], 1e-6)):8.2f} {np.mean(r[:, 1] > r[:, 3]):23.0%}')
+
+
+STORM311_START, STORM311_END = '2023-06-01', '2026-11-01'
+BOROUGH_POINTS = {  # one weather point per borough; Central Park for Manhattan
+    'MANHATTAN': (40.7812, -73.9665), 'BROOKLYN': (40.6782, -73.9442), 'QUEENS': (40.7282, -73.7949),
+    'BRONX': (40.8448, -73.8648), 'STATEN ISLAND': (40.5795, -74.1502),
+}
+
+
+def complaints_around_storms():
+    """Excess 311 flooding complaints after storms: how big a storm, and how long it lingers."""
+    rain_driven = [d for d in PUDDLE_DESCRIPTORS if 'Sunken' not in d and 'Grating' not in d]  # weight >= 0.5
+    quoted = ','.join("'" + d.replace("'", "''") + "'" for d in rain_driven)
+
+    def fetch_311():
+        rows, offset = [], 0
+        while True:  # SoQL has no hourly truncation: group by day and hour of day
+            q = urllib.parse.urlencode({
+                '$select': 'date_trunc_ymd(created_date) as day, date_extract_hh(created_date) as hh, borough, count(*) as n',
+                '$where': f"created_date >= '{STORM311_START}' AND created_date < '{STORM311_END}' AND complaint_type in('Sewer','Sewer Maintenance') AND descriptor in({quoted})",
+                '$group': 'day, hh, borough', '$order': 'day, hh, borough', '$limit': 50000, '$offset': offset})
+            page = get_json(f'https://data.cityofnewyork.us/resource/erm2-nwe9.json?{q}')
+            rows += page
+            if len(page) < 50000:
+                return rows
+            offset += 50000
+
+    def fetch_rain():
+        out = {}
+        for b, (lat, lon) in BOROUGH_POINTS.items():
+            q = urllib.parse.urlencode({'latitude': lat, 'longitude': lon, 'start_date': STORM311_START, 'end_date': '2026-10-31',
+                                        'hourly': 'precipitation', 'timezone': 'America/New_York'})
+            out[b] = [v or 0 for v in get_json(f'https://historical-forecast-api.open-meteo.com/v1/forecast?{q}')['hourly']['precipitation']]
+            time.sleep(7)
+        return out
+
+    rows = cached(f'311-hourly-borough-{STORM311_START}-{STORM311_END}.json', fetch_311)
+    rain = {b: np.array(v, float) for b, v in cached(f'rain-boroughs-{STORM311_START}-2026-10-31.json', fetch_rain).items()}
+    n = len(rain['MANHATTAN'])
+    t0 = datetime.fromisoformat(STORM311_START)  # both sources are New York wall-clock time
+    counts = {b: np.zeros(n) for b in BOROUGH_POINTS}
+    for r in rows:
+        h = int((datetime.fromisoformat(r['day'][:10]) - t0).total_seconds() // 3600) + int(r['hh'])
+        if r.get('borough') in counts and 0 <= h < n:
+            counts[r['borough']][h] += int(r['n'])
+    stamps = [t0 + timedelta(hours=h) for h in range(n)]
+    hour_of_week = np.array([t.weekday() * 24 + t.hour for t in stamps])
+    month = np.array([t.year * 12 + t.month for t in stamps])
+
+    dose, tails = [], defaultdict(list)
+    for b, p in rain.items():
+        c = counts[b]
+        last, dry = -10 ** 9, np.zeros(n, bool)  # dry: no rain hour in the previous 120 h
+        for h in range(n):
+            if p[h] >= RAIN_HOUR_MM:
+                last = h
+            dry[h] = h - last > 120
+        # Expected complaints in dry weather: hour-of-week shape × that month's dry level.
+        shape = np.array([c[dry & (hour_of_week == k)].mean() for k in range(168)])
+        shape /= shape.mean()
+        base = np.zeros(n)
+        for m in np.unique(month):
+            mm = month == m
+            level = c[mm & dry].mean() if (mm & dry).sum() > 48 else c[dry].mean()
+            base[mm] = level * shape[hour_of_week[mm]]
+        excess = c - base
+        idx = np.flatnonzero(p >= RAIN_HOUR_MM)
+        breaks = np.flatnonzero(np.diff(idx) > STORM_GAP_H)
+        storms = list(zip(np.r_[idx[0], idx[breaks + 1]], np.r_[idx[breaks], idx[-1]]))
+        starts = np.array([a for a, _ in storms])
+        for a, e in storms:
+            later = starts[starts > e]
+            gap = later[0] - e if later.size else 10 ** 9
+            if gap > 48 and e + 48 < n:
+                dose.append((p[a:e + 1].sum(), excess[a:e + 49].sum()))
+            if gap > 96 and e + 97 < n and p[a:e + 1].sum() >= 5:
+                tails['day' if 6 <= stamps[e].hour < 18 else 'night'].append(excess[e + 1:e + 97])
+
+    dose = np.array(dose)
+    rng = np.random.default_rng(3)
+    print(f'\n7. 311 flooding complaints around storms, {STORM311_START} to {STORM311_END} ({int(sum(c.sum() for c in counts.values()))} complaints)')
+    print(f'   Excess complaints from storm start to 48 h after ({len(dose)} borough-storms with 48 dry hours after), median by storm total:')
+    edges = [0.2, 5, 10, 15, 20, 30, 45, 70, float('inf')]
+    print('     ' + '  '.join(f'{lo:g}–{hi:g} mm: {np.median(dose[(dose[:, 0] >= lo) & (dose[:, 0] < hi), 1]):.1f}' for lo, hi in zip(edges, edges[1:])))
+    ratio = lambda d: np.median(d[(d[:, 0] >= 20) & (d[:, 0] < 70), 1]) / max(np.median(d[(d[:, 0] >= 5) & (d[:, 0] < 15), 1]), 0.1)
+    boot = [ratio(dose[rng.integers(len(dose), size=len(dose))]) for _ in range(1000)]
+    print(f'     20–70 mm storms vs 5–15 mm: {ratio(dose):.1f}× (90% {np.percentile(boot, 5):.1f}–{np.percentile(boot, 95):.1f}×): the response steps up between 15 and 20 mm, then plateaus')
+
+    def efold(curve):  # exponential fit to the positive tail, 12–96 h after the rain
+        x = np.arange(1, 97)
+        m = (x >= 12) & (curve > 0)
+        slope = np.polyfit(x[m], np.log(curve[m]), 1)[0] if m.sum() >= 5 else 0
+        return -1 / slope if slope < 0 else float('nan')
+    print('   Fade after the rain ends (storms >= 5 mm, 96 dry hours after), e-folding time of the excess:')
+    for k in ('day', 'night'):
+        arr = np.array(tails[k])
+        fits = [f for f in (efold(arr[rng.integers(len(arr), size=len(arr))].mean(0)) for _ in range(1000)) if np.isfinite(f)]
+        print(f'     storms ending by {k:5} (n={len(arr)}): median {np.median(fits):.0f} h, 90% {np.percentile(fits, 5):.0f}–{np.percentile(fits, 95):.0f} h')
+    print('     Reporting delay stretches this, so it is an upper bound; 24 h fits under it but is not confirmed.')
 
 
 if __name__ == '__main__':
