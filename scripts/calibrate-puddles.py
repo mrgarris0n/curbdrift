@@ -12,8 +12,9 @@ storm, and reports:
      ranks storms best inside the app's wetness = max(min(total / 20, 1), min(peak / R, 1));
   4. how often sensors off DEP's flood map flood, relative to those on it, at equal storm
      intensity (the susceptibility factor), with a by-sensor bootstrap interval;
-  5. for each 311 puddle descriptor, how much its complaints concentrate on rain days, which
-     gives DESCRIPTOR_WEIGHT (Central Park rain, Nov 2025 to Nov 2026, citywide 311 counts);
+  5. for each 311 puddle type, how much its complaints concentrate on rain days, which gives
+     DESCRIPTOR_WEIGHT (Nov 2025 to Nov 2026, citywide 311 counts; New York against Central Park
+     rain, Chicago against Midway);
   6. the drying term: evaporation as 1.05 × FAO-56 reference evapotranspiration (ET0), against
      the earlier sunshine-and-temperature guess and the energy limit (all sunshine evaporating
      water, 0.68 kWh/m² per mm), day by day at Central Park.
@@ -57,6 +58,9 @@ DESC_START, DESC_END = '2025-11-01', '2026-11-01'  # one year of 311 puddle comp
 PUDDLE_DESCRIPTORS = [  # js/sources/complaints.js
     'Catch Basin Clogged/Flooding (Use Comments) (SC)', 'Street Flooding (SJ)', 'Flooding on Street', 'Catch Basin Clogged',
     'Catch Basin Sunken/Damaged/Raised (SC1)', 'Catch Basin Sunken', 'Catch Basin Grating Missing (SA4)',
+]
+CHICAGO_PUDDLE_TYPES = [  # js/sources/complaints-chicago.js
+    'Water On Street Complaint', 'Alley Sewer Inspection Request', 'Sewer Cleaning Inspection Request', 'Sewer Cave-In Inspection Request',
 ]
 
 
@@ -197,23 +201,39 @@ def main():
     print(f'\n4. Off-map vs on-map flood rate at equal storm peak: {rr:.2f} '
           f'(95% interval resampling sensors: {np.percentile(boot, 2.5):.2f}–{np.percentile(boot, 97.5):.2f})')
 
-    descriptor_weights()
+    for city in WEIGHT_CITIES:
+        descriptor_weights(city)
     drying()
     complaints_around_storms()
 
 
-def descriptor_weights():
-    """Share of each descriptor's complaints filed on a rain day (≥ 2 mm that day or the day before)."""
-    quoted = ','.join("'" + d.replace("'", "''") + "'" for d in PUDDLE_DESCRIPTORS)
+WEIGHT_CITIES = [
+    {'label': 'New York', 'key': 'nyc', 'url': 'https://data.cityofnewyork.us/resource/erm2-nwe9.json', 'field': 'descriptor',
+     'where': "complaint_type in('Sewer','Sewer Maintenance')", 'used': PUDDLE_DESCRIPTORS, 'controls': [],
+     'rain': (40.7812, -73.9665, 'America/New_York', 'Central Park'), 'cache': ('311-daily', 'rain-central-park')},
+    {'label': 'Chicago', 'key': 'chicago', 'url': 'https://data.cityofchicago.org/resource/v6vf-nfxy.json', 'field': 'sr_type',
+     'where': 'true', 'used': CHICAGO_PUDDLE_TYPES,
+     # Shown, not used: rain-driven but indoors / a defect type that should not follow rain.
+     'controls': ['Water in Basement Complaint', 'Sidewalk Inspection Request'],
+     'rain': (41.7868, -87.7522, 'America/Chicago', 'Midway'), 'cache': ('chicago-311-daily', 'rain-midway')},
+]
+
+
+def descriptor_weights(city):
+    """Share of each complaint type filed on a rain day (≥ 2 mm that day or the day before)."""
+    types = city['used'] + city['controls']
+    quoted = ','.join("'" + d.replace("'", "''") + "'" for d in types)
+    f = city['field']
     q = urllib.parse.urlencode({
-        '$select': 'date_trunc_ymd(created_date) as day, descriptor, count(*) as n',
-        '$where': f"created_date >= '{DESC_START}' AND created_date < '{DESC_END}' AND complaint_type in('Sewer','Sewer Maintenance') AND descriptor in({quoted})",
-        '$group': 'day, descriptor', '$limit': 50000,
+        '$select': f'date_trunc_ymd(created_date) as day, {f}, count(*) as n',
+        '$where': f"created_date >= '{DESC_START}' AND created_date < '{DESC_END}' AND {city['where']} AND {f} in({quoted})",
+        '$group': f'day, {f}', '$limit': 50000,
     })
-    counts = cached(f'311-daily-{DESC_START}-{DESC_END}.json', lambda: get_json(f'https://data.cityofnewyork.us/resource/erm2-nwe9.json?{q}'))
-    w = urllib.parse.urlencode({'latitude': 40.7812, 'longitude': -73.9665, 'start_date': '2025-10-31', 'end_date': DESC_END,
-                                'daily': 'precipitation_sum', 'timezone': 'America/New_York'})
-    daily = cached(f'rain-central-park-{DESC_START}-{DESC_END}.json', lambda: get_json(f'https://archive-api.open-meteo.com/v1/archive?{w}'))['daily']
+    counts = cached(f"{city['cache'][0]}-{DESC_START}-{DESC_END}.json", lambda: get_json(f"{city['url']}?{q}"))
+    lat, lon, tz, place = city['rain']
+    w = urllib.parse.urlencode({'latitude': lat, 'longitude': lon, 'start_date': '2025-10-31', 'end_date': DESC_END,
+                                'daily': 'precipitation_sum', 'timezone': tz})
+    daily = cached(f"{city['cache'][1]}-{DESC_START}-{DESC_END}.json", lambda: get_json(f'https://archive-api.open-meteo.com/v1/archive?{w}'))['daily']
     rain = {d: (v or 0) for d, v in zip(daily['time'], daily['precipitation_sum'])}
     days = list(rain)
     wet = {d: rain[d] >= 2 or rain[days[i - 1]] >= 2 for i, d in enumerate(days) if i}
@@ -221,14 +241,15 @@ def descriptor_weights():
     n, on_rain = defaultdict(int), defaultdict(int)
     for r in counts:
         day = r['day'][:10]
-        n[r['descriptor']] += int(r['n'])
-        on_rain[r['descriptor']] += int(r['n']) * wet[day]
+        n[r[f]] += int(r['n'])
+        on_rain[r[f]] += int(r['n']) * wet[day]
     triggered = {d: max(0.0, (on_rain[d] / n[d] - base) / (1 - base)) for d in n}
-    top = max(triggered.values())
-    print(f'\n5. Rain days (≥ 2 mm that day or the day before): {base:.0%} of days, {DESC_START} to {DESC_END}')
-    print(f'   {"descriptor":50} {"complaints":>10} {"on rain days":>13} {"weight":>7}')
+    top = max(triggered[d] for d in city['used'] if d in triggered)
+    print(f"\n5. {city['label']}: rain days at {place} (≥ 2 mm that day or the day before): {base:.0%} of days, {DESC_START} to {DESC_END}")
+    print(f'   {"type":50} {"complaints":>10} {"on rain days":>13} {"weight":>7}')
     for d in sorted(n, key=lambda d: -triggered[d]):
-        print(f'   {d:50} {n[d]:10d} {on_rain[d] / n[d]:12.0%} {triggered[d] / top:7.2f}')
+        note = '' if d in city['used'] else '  (not used)'
+        print(f'   {d:50} {n[d]:10d} {on_rain[d] / n[d]:12.0%} {triggered[d] / top:7.2f}{note}')
 
 
 def drying():

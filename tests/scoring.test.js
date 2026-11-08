@@ -183,3 +183,19 @@ test('saturationIndex: the same rain a day ago stays wetter in November than in 
   const day = (evaporationMm) => saturationIndex({ ...filed(2), floodProne: true }, { rain72hMm: 10, evaporationMm });
   assert.ok(day(1.1) > day(5.5), `November ${day(1.1)} vs July ${day(5.5)}`);
 });
+
+test('every Chicago puddle type has its rain-day weight', async () => {
+  const { DESCRIPTOR_WEIGHT } = await import('../js/scoring.js');
+  const { PUDDLE_TYPES } = await import('../js/sources/complaints-chicago.js');
+  for (const t of PUDDLE_TYPES) assert.ok(DESCRIPTOR_WEIGHT[t] >= 0 && DESCRIPTOR_WEIGHT[t] <= 1, t);
+  assert.equal(DESCRIPTOR_WEIGHT['Water On Street Complaint'], 1);
+  assert.equal(DESCRIPTOR_WEIGHT['Alley Sewer Inspection Request'], 0.6);
+  assert.equal(DESCRIPTOR_WEIGHT['Sewer Cleaning Inspection Request'], 0.5);
+  assert.equal(DESCRIPTOR_WEIGHT['Sewer Cave-In Inspection Request'], 0.2);
+});
+
+test('weightedComplaints sums complaints by their weights', async () => {
+  const { weightedComplaints } = await import('../js/scoring.js');
+  assert.equal(weightedComplaints({ 'Flooding on Street': 2, 'Catch Basin Clogged/Flooding (Use Comments) (SC)': 1 }), 2.5);
+  assert.equal(weightedComplaints({}), 0);
+});

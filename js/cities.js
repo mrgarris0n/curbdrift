@@ -3,6 +3,8 @@
 // functions return and does not care which city they came from.
 import { fetchSheds } from './sources/sheds.js';
 import { fetchComplaints } from './sources/complaints.js';
+import { fetchSheds as fetchChicagoSheds } from './sources/sheds-chicago.js';
+import { fetchComplaints as fetchChicagoComplaints } from './sources/complaints-chicago.js';
 import { fetchFlood } from './sources/flood.js';
 import { fetchWeather } from './sources/weather.js';
 
@@ -16,6 +18,15 @@ export const CITIES = Object.freeze({
     // Start dates of mayoral terms (de Blasio, Adams, Mamdani).
     mayorTermStarts: Object.freeze(['2014-01-01', '2022-01-01', '2026-01-01']),
     sources: Object.freeze({ fetchSheds, fetchComplaints, fetchWeather, fetchFlood }),
+  }),
+  chicago: Object.freeze({
+    id: 'chicago',
+    name: 'Chicago',
+    bbox: Object.freeze({ south: 41.6445, north: 42.0230, west: -87.9401, east: -87.5240 }),
+    // Start dates of mayoral terms (Lightfoot, Johnson); the permit data starts in 2017.
+    mayorTermStarts: Object.freeze(['2019-05-20', '2023-05-15']),
+    // Chicago publishes no stormwater flood map, so its puddles all count as off the map.
+    sources: Object.freeze({ fetchSheds: fetchChicagoSheds, fetchComplaints: fetchChicagoComplaints, fetchWeather, fetchFlood: async () => [] }),
   }),
 });
 

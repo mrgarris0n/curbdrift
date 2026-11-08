@@ -29,6 +29,20 @@ const address = (r) => clean(`${r.street_number ?? ''} ${r.street_direction ?? '
 // The first contact whose type mentions the role ("OWNER", "OWNER AS GENERAL CONTRACTOR", …).
 const contact = (r, role) => clean(r[`contact_${CONTACTS.find((i) => (r[`contact_${i}_type`] ?? '').includes(role))}_name`]);
 
+// New York's permits name owners by business only. Chicago's owner contact can be a private person
+// (about a fifth of active scaffolds), so an owner is named only when the name is clearly an
+// organisation; anything else is withheld. Deliberately cautious: no TRUST or ESTATE, which are
+// usually named after a person.
+const ORGANISATION = /\b(LLC|L\.L\.C|INC|CORP|CO\b|COMPAN|ASSOC|ASSN|CONDO|LP\b|L\.P\b|PARTNER|BANK|CHURCH|UNIVERSIT|COLLEGE|SCHOOL|HOSPITAL|CITY OF|CHICAGO|MANAGEMENT|PROPERT|REALTY|HOLDING|FUND|GROUP|CLUB|TOWER|BUILDING|BLDG|HOTEL|CENTER|COOP|AUTHORITY|DISTRICT|LTD|FOUNDATION|BOARD|INSTITUT|MUSEUM|HOUSING|APARTMENT|VENTURE|CAPITAL|INVEST|ARCHDIOCESE|PARISH|LOFT|PLAZA|COMMONS|DEVELOPMENT|NFP)/;
+// Contract boilerplate some filers append, e.g. 'JBC FUNDS … LLC ("OWNER")'.
+const OWNER_NOTE = /\s*\(\s*["“”']?\s*OWNER\s*["“”']?\s*\)\s*$/i;
+
+function owner(r) {
+  const name = contact(r, 'OWNER').replace(OWNER_NOTE, '');
+  if (!name) return { owner: '', ownerWithheld: false };
+  return ORGANISATION.test(name.toUpperCase()) ? { owner: name, ownerWithheld: false } : { owner: '', ownerWithheld: true };
+}
+
 function normalize(row) {
   const lat = Number.parseFloat(row.latitude);
   const lon = Number.parseFloat(row.longitude);
@@ -48,7 +62,7 @@ export function groupChicagoPermits(rows, today) {
   return chainStructures(rows.map(normalize).filter(Boolean), today, ({ key, row }) => ({
     address: key,
     workType: 'Scaffold',
-    owner: contact(row, 'OWNER'),
+    ...owner(row),
     contractor: contact(row, 'CONTRACTOR'),
   }));
 }

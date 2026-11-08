@@ -88,3 +88,21 @@ test('fetchSheds reads the Chicago snapshot', async () => {
   assert.equal(SNAPSHOT_URL, '/data/sheds-chicago.json');
   assert.equal(items.length, 1);
 });
+
+// New York only shows owners' business names. Chicago's owner contact can be a private person, so
+// a name is shown only when it is clearly an organisation; otherwise it is withheld (not "missing").
+test('organisations are named; private owners are withheld', () => {
+  const owner = (name) => groupChicagoPermits([permit('2026-03-01', { contact_1_name: name })], TODAY)[0];
+  for (const org of ['CHESTNUT TOWER LLC', 'THE IMPERIAL TOWERS CONDOMINIUM ASSOCIATION', 'DE PAUL UNIVERSITY', 'THE CHICAGO CLUB']) {
+    assert.equal(owner(org).owner, org);
+    assert.equal(owner(org).ownerWithheld, false);
+  }
+  const person = owner('JANE Q PUBLIC');
+  assert.equal(person.owner, '');
+  assert.equal(person.ownerWithheld, true);
+});
+
+test('contract annotations are stripped from owner names', () => {
+  const [s] = groupChicagoPermits([permit('2026-03-01', { contact_1_name: 'JBC FUNDS 33 NORTH LASALLE LLC (“OWNER”)' })], TODAY);
+  assert.equal(s.owner, 'JBC FUNDS 33 NORTH LASALLE LLC');
+});

@@ -74,3 +74,11 @@ test('params include within_circle and both descriptor lists', () => {
   assert.equal(PUDDLE_DESCRIPTORS.length, 7);
   assert.equal(DEFECT_DESCRIPTORS.length, 7);
 });
+
+test('New York keeps its 30 m clusters and keeps single low-weight complaints', () => {
+  const { puddles } = splitComplaints([
+    row('Sewer', 'Catch Basin Sunken/Damaged/Raised (SC1)', '2026-10-01'), // weight 0, still a puddle in NYC
+    row('Sewer', 'Street Flooding (SJ)', '2026-10-01', { latitude: '40.73650' }), // ~67 m north: separate
+  ], TODAY);
+  assert.equal(puddles.length, 2);
+});

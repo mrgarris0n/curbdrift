@@ -27,6 +27,12 @@ const workTypeName = {
   'Sidewalk Shed': 'A sidewalk shed',
   'Supported Scaffold': 'A scaffold, standing on the ground',
   'Suspended Scaffold': 'A scaffold, hanging from the roof',
+  Scaffold: 'A scaffold',
+};
+
+// Chicago's 311 names the request, not the condition.
+const defectName = {
+  'Sidewalk Inspection Request': 'Something wrong with the sidewalk; they asked for an inspection',
 };
 
 const shedNotes = {
@@ -52,7 +58,7 @@ function shedRows(s) {
     { label: 'Permit renewed', value: times(s.renewals) },
     { label: 'Mayors it has outlived', value: String(s.mayorsOutlasted) },
     { label: 'Allowed to stay until', value: day(s.latestExpiry) },
-    { label: 'Belongs to', value: orUnknown(s.owner) },
+    { label: 'Belongs to', value: s.ownerWithheld ? 'A private person (we leave their name out)' : orUnknown(s.owner) },
     { label: 'Put up by', value: orUnknown(s.contractor) },
     { label: 'How it seems', value: shedClass[s.classKey] },
   ];
@@ -78,7 +84,7 @@ function puddleRows(p) {
 
 function defectRows(d) {
   return [
-    { label: 'What someone noticed', value: d.descriptor },
+    { label: 'What someone noticed', value: defectName[d.descriptor] ?? d.descriptor },
     { label: 'When', value: day(d.created) },
     { label: 'Where', value: orUnknown(d.address) },
     { label: 'What the city says', value: d.closed ? 'Fixed' : 'Nothing yet' },
