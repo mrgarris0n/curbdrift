@@ -158,7 +158,7 @@ export const field = {
     tapHint: 'Tap anything to hear its story. Move the map to look somewhere else.',
     resurvey: 'Look around here',
     routeButton: 'Suggest a walk',
-    cancelRoute: 'Never mind',
+    cancelRoute: 'Never mind the walk',
     routeEmpty: 'There is not enough worth seeing within walking distance. Try somewhere else.',
     close: 'Close',
     summaryTitle: 'Around here',
