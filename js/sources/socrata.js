@@ -59,9 +59,9 @@ export async function getRecordsJson(url, { fetchImpl = globalThis.fetch, timeou
   }
 }
 
-/** Query a NYC Open Data (Socrata) dataset. Resolves to the row array. */
-export async function socrataQuery(datasetId, params, { storage = defaultStorage(), now = Date.now, ...opts } = {}) {
-  const url = `${PROXY}?${new URLSearchParams({ dataset: datasetId, ...params })}`;
+/** Query a city's Socrata open-data portal through /api/socrata (city: that proxy's city id). Resolves to the row array. */
+export async function socrataQuery(datasetId, params, { city, storage = defaultStorage(), now = Date.now, ...opts } = {}) {
+  const url = `${PROXY}?${new URLSearchParams({ ...(city ? { city } : {}), dataset: datasetId, ...params })}`;
   const t = now();
   const cached = readCache(storage, url, t);
   if (cached) return cached;

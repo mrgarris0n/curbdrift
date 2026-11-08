@@ -1,8 +1,8 @@
 // Vercel Function: POST /api/route  { points: [{lat, lon}, …] }
 // Asks OpenRouteService for a walking route through the points, in order, adding the API key
 // server-side (env ORS_API_KEY) so it never reaches the browser. Deliberately narrow: only short
-// walks inside New York City, so this cannot be used as a general-purpose router on our quota.
-import { isInNyc } from '../js/geo.js';
+// walks inside one of the app's cities, so this cannot be used as a general-purpose router on our quota.
+import { cityAt } from '../js/cities.js';
 
 // api.openrouteservice.org was deprecated (shut down Nov 2026); same key, same format here:
 // https://ask.openrouteservice.org/t/deprecating-api-openrouteservice-org-in-favour-of-api-heigit-org/7912
@@ -20,7 +20,9 @@ function json(body, status) {
 function validPoints(body) {
   const points = body?.points;
   if (!Array.isArray(points) || points.length < 2 || points.length > MAX_POINTS) return null;
-  const ok = points.every((p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lon) && isInNyc(p));
+  const valid = points.every((p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lon));
+  const city = valid ? cityAt(points[0]) : null;
+  const ok = city !== null && points.every((p) => cityAt(p) === city); // one walk, one city
   return ok ? points.map((p) => ({ lat: p.lat, lon: p.lon })) : null;
 }
 
@@ -49,7 +51,7 @@ export async function handleRoute(request, { key = process.env.ORS_API_KEY ?? ''
     return json({ message: 'invalid body' }, 400);
   }
   const points = validPoints(body);
-  if (!points) return json({ message: 'expected 2–14 points inside New York City' }, 400);
+  if (!points) return json({ message: 'expected 2–14 points inside one supported city' }, 400);
   if (!key) return json({ message: 'routing not configured' }, 503);
 
   let upstream;

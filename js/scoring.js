@@ -7,7 +7,7 @@
  *   Scaffold (S)
  *     yearsContinuous = (today − chainStart) / 365.25 days
  *     classKey        = <1 'temporary' | <3 'prolonged' | <6 'semiPermanent' | else 'permanent'
- *     mayorsOutlasted = mayoral terms that began after chainStart and on/before today
+ *     mayorsOutlasted = the city's mayoral terms that began after chainStart and on/before today
  *     score           = min(100, yearsContinuous / 9 × 100)   (9 years ≈ all of DOB NOW history)
  *
  *   Puddle (P) — "Saturation Index", 0–100, two decimals; null when weather is unknown
@@ -37,7 +37,6 @@
  *     Rewards both how bad the worst things are and having enough of them; unlike a capped sum,
  *     it does not saturate just because an area is dense (Manhattan has 150+ sheds per survey).
  */
-import { MAYOR_TERM_STARTS } from './config.js';
 import { DAY_MS } from './dates.js';
 
 const round = (x, places) => Math.round(x * 10 ** places) / 10 ** places;
@@ -53,17 +52,18 @@ export function classifyShed(years) {
   return 'permanent';
 }
 
-export function mayorsOutlasted(chainStart, today) {
-  return MAYOR_TERM_STARTS.map((d) => new Date(`${d}T00:00:00Z`)).filter((d) => d > chainStart && d <= today).length;
+/** termStarts: the surveyed city's mayoral term start dates (YYYY-MM-DD). */
+export function mayorsOutlasted(chainStart, today, termStarts) {
+  return termStarts.map((d) => new Date(`${d}T00:00:00Z`)).filter((d) => d > chainStart && d <= today).length;
 }
 
-export function scoreShed(facts, today) {
+export function scoreShed(facts, today, mayorTermStarts) {
   const yearsContinuous = Math.max(0, yearsBetween(facts.chainStart, today));
   return {
     ...facts,
     yearsContinuous,
     classKey: classifyShed(yearsContinuous),
-    mayorsOutlasted: mayorsOutlasted(facts.chainStart, today),
+    mayorsOutlasted: mayorsOutlasted(facts.chainStart, today, mayorTermStarts),
     score: Math.min(100, (yearsContinuous / 9) * 100),
   };
 }

@@ -95,6 +95,6 @@ export function splitComplaints(rows, today) {
 
 export async function fetchComplaints(center, radiusM, opts) {
   const today = new Date();
-  const rows = await socrataQuery(DATASET, buildComplaintParams(center, radiusM, today), opts);
+  const rows = await socrataQuery(DATASET, buildComplaintParams(center, radiusM, today), { ...opts, city: 'nyc' });
   return splitComplaints(rows, today);
 }
