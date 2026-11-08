@@ -30,39 +30,41 @@ function normalize(row) {
   const issued = parseApiDate(row.issued_date);
   const expired = parseApiDate(row.expired_date);
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || !issued || !expired || !row.bin || !row.work_type) return null;
-  return { row, lat, lon, issued, expired };
+  return {
+    key: `${row.bin}|${row.work_type}`, job: row.job_filing_number, issued, expired,
+    ended: row.permit_status === 'Signed-off', lat, lon, row,
+  };
 }
 
-const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+export const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 
 /**
- * Collapse yearly permits into structures. A structure is one bin + work type; it is
- * active when any of its jobs' latest permit has not expired and was not signed off (signed-off = removed).
- * Its age is the start of the unbroken permit chain ending at the latest permit, where
- * permits less than SHED_GAP_DAYS apart (or overlapping) count as continuous.
+ * Collapse permits into structures; every city's permits are normalised to this shape first:
+ * {key, job, issued, expired, ended, lat, lon, row}. A structure is one key; it is active when
+ * any of its jobs' latest permit has not expired and has not ended (signed off / taken down).
+ * Its age is the start of the unbroken permit chain ending at the latest permit, where permits
+ * less than SHED_GAP_DAYS apart (or overlapping) count as continuous. describe(latest) adds the
+ * city-specific facts: {address, workType, owner, contractor}.
  * @returns {ShedFacts[]}
  */
-export function groupShedPermits(rows, today) {
+export function chainStructures(permits, today, describe) {
   const groups = new Map();
-  for (const r of rows) {
-    const p = normalize(r);
-    if (!p) continue;
-    const key = `${r.bin}|${r.work_type}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(p);
+  for (const p of permits) {
+    if (!groups.has(p.key)) groups.set(p.key, []);
+    groups.get(p.key).push(p);
   }
 
   const items = [];
-  for (const [key, permits] of groups) {
-    permits.sort((a, b) => a.issued - b.issued || a.expired - b.expired);
-    // A building can have several shed jobs at once; each is up until its own latest
-    // permit expires or is signed off, so one finished job must not hide another.
+  for (const [key, list] of groups) {
+    list.sort((a, b) => a.issued - b.issued || a.expired - b.expired);
+    // A building can have several jobs at once; each is up until its own latest permit
+    // expires or ends, so one finished job must not hide another.
     const jobLatest = new Map();
-    for (const p of permits) {
-      const best = jobLatest.get(p.row.job_filing_number);
-      if (!best || p.expired > best.expired || (+p.expired === +best.expired && p.issued > best.issued)) jobLatest.set(p.row.job_filing_number, p);
+    for (const p of list) {
+      const best = jobLatest.get(p.job);
+      if (!best || p.expired > best.expired || (+p.expired === +best.expired && p.issued > best.issued)) jobLatest.set(p.job, p);
     }
-    const active = [...jobLatest.values()].filter((p) => p.expired >= today && p.row.permit_status !== 'Signed-off');
+    const active = [...jobLatest.values()].filter((p) => p.expired >= today && !p.ended);
     if (active.length === 0) continue;
     const latest = active.reduce((best, p) => (p.expired > best.expired || (+p.expired === +best.expired && p.issued > best.issued) ? p : best));
 
@@ -70,43 +72,48 @@ export function groupShedPermits(rows, today) {
     // already covered when permit i was issued. Walk backward while that gap stays small.
     const coveredUntil = [];
     let maxExp = -Infinity;
-    for (const p of permits) {
+    for (const p of list) {
       coveredUntil.push(maxExp);
       maxExp = Math.max(maxExp, +p.expired);
     }
-    let i = permits.length - 1;
-    while (i > 0 && (permits[i].issued - coveredUntil[i]) / DAY_MS < SHED_GAP_DAYS) i -= 1;
-    const chain = permits.slice(i);
+    let i = list.length - 1;
+    while (i > 0 && (list[i].issued - coveredUntil[i]) / DAY_MS < SHED_GAP_DAYS) i -= 1;
+    const chain = list.slice(i);
     const chainStart = chain[0].issued; // sorted by issued, so the first is earliest
     // Permits issued the same day are parallel structures, not renewals.
     const renewals = new Set(chain.map((p) => +p.issued)).size - 1;
 
-    const r = latest.row;
     items.push({
-      kind: 'S',
-      id: key,
-      lat: latest.lat,
-      lon: latest.lon,
-      address: clean(`${r.house_no ?? ''} ${r.street_name ?? ''}`),
-      workType: r.work_type,
-      chainStart,
-      renewals,
-      latestExpiry: latest.expired,
-      owner: clean(r.owner_business_name),
-      contractor: clean(r.applicant_business_name),
+      kind: 'S', id: key, lat: latest.lat, lon: latest.lon,
+      chainStart, renewals, latestExpiry: latest.expired, ...describe(latest),
     });
   }
   return items;
 }
 
-/** Permit rows → the JSON snapshot the browser reads. Dates become UTC days. */
-export function toSnapshot(rows, now) {
-  const sheds = groupShedPermits(rows, parseApiDate(isoDay(now))).map(({ kind, chainStart, latestExpiry, ...rest }) => ({
+/** New York DOB NOW permits → structures (one per building and work type). @returns {ShedFacts[]} */
+export function groupShedPermits(rows, today) {
+  return chainStructures(rows.map(normalize).filter(Boolean), today, ({ row: r }) => ({
+    address: clean(`${r.house_no ?? ''} ${r.street_name ?? ''}`),
+    workType: r.work_type,
+    owner: clean(r.owner_business_name),
+    contractor: clean(r.applicant_business_name),
+  }));
+}
+
+/** Structures → the JSON snapshot the browser reads. Dates become UTC days. */
+export function snapshotOf(structures, now) {
+  const sheds = structures.map(({ kind, chainStart, latestExpiry, ...rest }) => ({
     ...rest,
     chainStart: isoDay(chainStart),
     latestExpiry: isoDay(latestExpiry),
   }));
   return { generatedAt: now.toISOString(), sheds };
+}
+
+/** New York permit rows → the JSON snapshot the browser reads. */
+export function toSnapshot(rows, now) {
+  return snapshotOf(groupShedPermits(rows, parseApiDate(isoDay(now))), now);
 }
 
 /** Snapshot → the structures inside the survey circle still permitted on `today`. @returns {ShedFacts[]} */
@@ -124,9 +131,14 @@ export function shedsFromSnapshot(snapshot, center, radiusM, today) {
   return items;
 }
 
-/** @returns {Promise<ShedFacts[]>} */
-export async function fetchSheds(center, radiusM, { fetchImpl, timeoutMs, signal } = {}) {
-  const snapshot = await getRecordsJson(SNAPSHOT_URL, { fetchImpl, timeoutMs, signal });
+/** Read a city's static shed snapshot and keep the structures in the survey circle. @returns {Promise<ShedFacts[]>} */
+export async function fetchShedSnapshot(url, center, radiusM, { fetchImpl, timeoutMs, signal } = {}) {
+  const snapshot = await getRecordsJson(url, { fetchImpl, timeoutMs, signal });
   // Expiry is a calendar day: a permit expiring today still counts today.
   return shedsFromSnapshot(snapshot, center, radiusM, parseApiDate(isoDay(new Date())));
+}
+
+/** @returns {Promise<ShedFacts[]>} */
+export function fetchSheds(center, radiusM, opts) {
+  return fetchShedSnapshot(SNAPSHOT_URL, center, radiusM, opts);
 }
