@@ -4,6 +4,7 @@ import { resolveStart } from './geo.js';
 import { fetchSheds } from './sources/sheds.js';
 import { fetchComplaints } from './sources/complaints.js';
 import { fetchWeather, summarizeWeather } from './sources/weather.js';
+import { fetchFlood, mergeFloodSpots } from './sources/flood.js';
 import { scoreShed, scorePuddle, scoreDefect, areaRating } from './scoring.js';
 import { THEMES, pickTheme } from './themes/index.js';
 import { createMap } from './map.js';
@@ -71,7 +72,7 @@ export function locate(geolocation, timeoutMs = GEO_TIMEOUT_MS, onLate = () => {
  * *or processing* a layer marks it in `errors` rather than silently emptying it.
  * onSheds(scored) fires as soon as scaffolding is ready (it is the fast query).
  */
-export async function gatherSurvey(at, today, sources = { fetchSheds, fetchComplaints, fetchWeather }, onSheds = () => {}, signal = undefined) {
+export async function gatherSurvey(at, today, sources = { fetchSheds, fetchComplaints, fetchWeather, fetchFlood }, onSheds = () => {}, signal = undefined) {
   const result = { sheds: [], puddles: [], defects: [], errors: {} };
 
   const shedsDone = sources.fetchSheds(at, RADIUS_M, { signal })
@@ -83,10 +84,17 @@ export async function gatherSurvey(at, today, sources = { fetchSheds, fetchCompl
     .then((hourly) => summarizeWeather(hourly, new Date()))
     .catch((err) => { console.warn('weather', err); return null; });
 
+  // The flood map is optional too: without it, puddles rest on 311 complaints alone.
+  const flood = sources.fetchFlood(at, RADIUS_M, { signal })
+    .catch((err) => { console.warn('flood map', err); return []; });
+
   const complaintsDone = sources.fetchComplaints(at, RADIUS_M, { signal })
     .then(async (found) => {
-      const w = await weather;
-      result.puddles = found.puddles.map((p) => scorePuddle(p, w));
+      const [w, spots] = await Promise.all([weather, flood]);
+      // A modelled spot nobody has complained about only shows once it has rained enough to matter.
+      result.puddles = mergeFloodSpots(found.puddles, spots)
+        .map((p) => scorePuddle(p, w))
+        .filter((p) => p.complaintCount > 0 || p.statusKey === 'probable' || p.statusKey === 'peak');
       result.defects = found.defects.map(scoreDefect);
     })
     .catch((err) => { result.puddles = []; result.defects = []; result.errors.P = true; result.errors.D = true; console.warn('311', err); });

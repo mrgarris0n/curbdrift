@@ -62,6 +62,7 @@ test('gatherSurvey: weather that resolves but cannot be summarized still yields 
     fetchComplaints: async () => ({ puddles: [facts.puddle], defects: [facts.defect] }),
     // 200 but missing arrays. The hour must sit inside the real-clock 72h window, or nothing reads the arrays.
     fetchWeather: async () => ({ time: [new Date(Date.now() - 3600000).toISOString().slice(0, 16)] }),
+    fetchFlood: async () => [],
   });
   assert.equal(result.puddles.length, 1);
   assert.equal(result.puddles[0].statusKey, 'unknown');
@@ -75,6 +76,7 @@ test('gatherSurvey: a failure while processing complaints is reported, not swall
     fetchSheds: async () => [facts.shed],
     fetchComplaints: async () => ({ puddles: null, defects: null }), // malformed → throws while scoring
     fetchWeather: async () => { throw new Error('down'); },
+    fetchFlood: async () => [],
   });
   assert.equal(result.sheds.length, 1);
   assert.equal(result.errors.P, true);
@@ -88,6 +90,7 @@ test('gatherSurvey: source rejections mark only their layers', async () => {
     fetchSheds: async () => { throw new Error('429'); },
     fetchComplaints: async () => ({ puddles: [facts.puddle], defects: [] }),
     fetchWeather: async () => { throw new Error('down'); },
+    fetchFlood: async () => [],
   }, (s) => { shedsSeen = s; });
   assert.equal(shedsSeen, null);
   assert.deepEqual(result.errors, { S: true });
@@ -103,6 +106,48 @@ test('gatherSurvey hands its cancellation signal to every source', async () => {
     fetchSheds: spy([]),
     fetchComplaints: spy({ puddles: [], defects: [] }),
     fetchWeather: spy({ time: [], precipitation: [], shortwave_radiation: [], temperature_2m: [] }),
+    fetchFlood: spy([]),
   }, undefined, signal);
-  assert.deepEqual(seen, [true, true, true]);
+  assert.deepEqual(seen, [true, true, true, true]);
+});
+
+// Hourly weather on the real clock: `mm` of rain in the last hour (or none), no sun.
+const hourlyRain = (mm) => {
+  const t = new Date(Date.now() - 3600000).toISOString().slice(0, 16);
+  return { time: [t], precipitation: [mm], shortwave_radiation: [0], temperature_2m: [10] };
+};
+const near = { lat: 0.0001, lon: 0, deep: true }; // ~11 m from facts.puddle
+const away = { lat: 0.002, lon: 0, deep: false }; // ~220 m away
+
+const floodSurvey = async (rainMm, fetchFlood) => {
+  const { gatherSurvey } = await import('../js/app.js');
+  return gatherSurvey({ lat: 0, lon: 0 }, new Date(), {
+    fetchSheds: async () => [],
+    fetchComplaints: async () => ({ puddles: [facts.puddle], defects: [] }),
+    fetchWeather: async () => hourlyRain(rainMm),
+    fetchFlood,
+  });
+};
+
+test('gatherSurvey: flood spots mark nearby complaint puddles and add wet flood-only puddles', async () => {
+  const result = await floodSurvey(10, async () => [near, away]);
+  assert.deepEqual(result.errors, {});
+  const byId = Object.fromEntries(result.puddles.map((p) => [p.id, p]));
+  assert.equal(byId.p.floodProne, true);
+  assert.equal(byId.p.floodDepth, 'deep');
+  const only = result.puddles.filter((p) => p.complaintCount === 0);
+  assert.equal(only.length, 1);
+  assert.ok(only[0].saturation >= 15, `flood-only shown at ${only[0].saturation}`);
+});
+
+test('gatherSurvey: flood-only puddles stay hidden on a dry day, complaint puddles stay', async () => {
+  const result = await floodSurvey(0, async () => [near, away]);
+  assert.deepEqual(result.puddles.map((p) => p.id), ['p']);
+  assert.equal(result.puddles[0].floodProne, true);
+});
+
+test('gatherSurvey: a failed flood layer leaves complaint puddles, unmarked, with no error', async () => {
+  const result = await floodSurvey(10, async () => { throw new Error('404'); });
+  assert.deepEqual(result.errors, {});
+  assert.deepEqual(result.puddles.map((p) => [p.id, p.floodProne]), [['p', false]]);
 });

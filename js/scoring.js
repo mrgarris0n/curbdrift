@@ -15,8 +15,10 @@
  *     intensity      = min(peakHourMm72h / 7.6, 1)          (7.6 mm/h = 0.3 in/h, AMS "heavy rain")
  *     burst          = intensity × exp(−hoursSincePeak / 24)  (0 when there was no rain hour)
  *     wetness        = max(min(effectiveWater / 20, 1), burst)
+ *     susceptibility = floodProne ? 1 : 0.6   (on DEP's stormwater flood map; complaint-only spots
+ *                                             show a drainage problem but less evidence of pooling)
  *     repeat         = min(complaintCount, 5) / 5
- *     saturation     = 100 × wetness × (0.5 + 0.5 × repeat)
+ *     saturation     = 100 × wetness × susceptibility × (0.5 + 0.5 × repeat)
  *     The burst lets a short downpour outrun the drains even when the 72h total is modest or
  *     already offset by sun; it fades over about a day, independently of drying.
  *     statusKey      = null 'unknown' | <15 'dormant' | <60 'probable' | else 'peak'
@@ -70,7 +72,8 @@ export function areaRating(scoredItems) {
 
 const HEAVY_RAIN_MM_H = 7.6;
 
-export function saturationIndex(complaintCount, weather) {
+/** facts: {complaintCount, floodProne}. */
+export function saturationIndex({ complaintCount, floodProne }, weather) {
   if (!weather) return null;
   const tempFactor = 1 + Math.max(0, weather.meanTempC) / 25;
   const effectiveWater = Math.max(0, weather.rain72hMm - 1.2 * weather.dryingKWh * tempFactor);
@@ -78,7 +81,8 @@ export function saturationIndex(complaintCount, weather) {
   const burst = weather.hoursSincePeak == null ? 0 : intensity * Math.exp(-weather.hoursSincePeak / 24);
   const wetness = Math.max(Math.min(effectiveWater / 20, 1), burst);
   const repeat = Math.min(complaintCount, 5) / 5;
-  return round(100 * wetness * (0.5 + 0.5 * repeat), 2);
+  const susceptibility = floodProne ? 1 : 0.6;
+  return round(100 * wetness * susceptibility * (0.5 + 0.5 * repeat), 2);
 }
 
 export function puddleStatus(saturation) {
@@ -89,7 +93,7 @@ export function puddleStatus(saturation) {
 }
 
 export function scorePuddle(facts, weather) {
-  const saturation = saturationIndex(facts.complaintCount, weather);
+  const saturation = saturationIndex(facts, weather);
   return { ...facts, saturation, statusKey: puddleStatus(saturation), score: saturation ?? 0 };
 }
 

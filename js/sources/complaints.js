@@ -5,7 +5,8 @@ import { parseApiDate, isoDay, monthsBefore } from '../dates.js';
 
 // NYC 311 Service Requests.
 const DATASET = 'erm2-nwe9';
-const CLUSTER_M = 30;
+// Complaints this close together are one puddle; flood-map spots this close to one belong to it.
+export const CLUSTER_M = 30;
 
 export const PUDDLE_DESCRIPTORS = Object.freeze([
   'Catch Basin Clogged/Flooding (Use Comments) (SC)',
