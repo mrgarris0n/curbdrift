@@ -60,7 +60,8 @@ test('gatherSurvey: weather that resolves but cannot be summarized still yields 
   const result = await gatherSurvey({ lat: 0, lon: 0 }, new Date('2026-11-06T00:00:00Z'), {
     fetchSheds: async () => [facts.shed],
     fetchComplaints: async () => ({ puddles: [facts.puddle], defects: [facts.defect] }),
-    fetchWeather: async () => ({ time: ['2026-11-05T00:00'] }), // 200 but missing arrays
+    // 200 but missing arrays. The hour must sit inside the real-clock 72h window, or nothing reads the arrays.
+    fetchWeather: async () => ({ time: [new Date(Date.now() - 3600000).toISOString().slice(0, 16)] }),
   });
   assert.equal(result.puddles.length, 1);
   assert.equal(result.puddles[0].statusKey, 'unknown');
