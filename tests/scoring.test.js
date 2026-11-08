@@ -87,3 +87,36 @@ test('scoreDefect', async () => {
   assert.equal(scoreDefect({ descriptor: 'Sidewalk Collapsed', closed: false }).score, 70);
   assert.equal(scoreDefect({ descriptor: 'Cellar Door Open/Unprotected', closed: true }).score, 40);
 });
+
+// Rain-intensity (burst) term. A November day of sun is roughly 2–3 kWh/m².
+test('saturationIndex: no rain with peak fields is 0', async () => {
+  const { saturationIndex } = await import('../js/scoring.js');
+  assert.equal(saturationIndex(5, { rain72hMm: 0, peakHourMm72h: 0, hoursSincePeak: null, dryingKWh: 0, meanTempC: 10 }), 0);
+});
+
+test('saturationIndex: heavy one-hour burst 2h ago is at least probable', async () => {
+  const { saturationIndex, puddleStatus } = await import('../js/scoring.js');
+  const s = saturationIndex(1, { rain72hMm: 10, peakHourMm72h: 10, hoursSincePeak: 2, dryingKWh: 0.3, meanTempC: 12 });
+  assert.notEqual(puddleStatus(s), 'dormant');
+  assert.notEqual(puddleStatus(s), 'unknown');
+});
+
+test('saturationIndex: the same burst 3 days ago, after sunny days, is dormant', async () => {
+  const { saturationIndex, puddleStatus } = await import('../js/scoring.js');
+  const s = saturationIndex(1, { rain72hMm: 10, peakHourMm72h: 10, hoursSincePeak: 70, dryingKWh: 7, meanTempC: 12 });
+  assert.equal(puddleStatus(s), 'dormant');
+});
+
+test('saturationIndex: a drizzle with the same 72h total scores lower than a burst', async () => {
+  const { saturationIndex } = await import('../js/scoring.js');
+  const base = { rain72hMm: 10, hoursSincePeak: 2, dryingKWh: 0.3, meanTempC: 12 };
+  const drizzle = saturationIndex(1, { ...base, peakHourMm72h: 0.5 });
+  const burst = saturationIndex(1, { ...base, peakHourMm72h: 10 });
+  assert.ok(burst > drizzle, `burst ${burst} should beat drizzle ${drizzle}`);
+});
+
+test('saturationIndex: a burst still counts when sun has offset the 72h total', async () => {
+  const { saturationIndex, puddleStatus } = await import('../js/scoring.js');
+  const s = saturationIndex(3, { rain72hMm: 6, peakHourMm72h: 6, hoursSincePeak: 5, dryingKWh: 4, meanTempC: 15 });
+  assert.equal(puddleStatus(s), 'probable');
+});
