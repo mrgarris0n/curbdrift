@@ -11,7 +11,7 @@ test('credits name the developer, the repo and the inspirations', () => {
 
 test('credits list every data source the app uses, each with an https link', () => {
   const urls = CREDITS.sources.map((s) => s.url).join(' ');
-  for (const needle of ['rbx6-tga4', 'erm2-nwe9', 'open-meteo.com', 'openstreetmap.org/copyright']) assert.ok(urls.includes(needle), needle);
+  for (const needle of ['rbx6-tga4', 'erm2-nwe9', '9i7c-xyvv', 'open-meteo.com', 'openstreetmap.org/copyright']) assert.ok(urls.includes(needle), needle);
   for (const s of CREDITS.sources) {
     assert.ok(s.name && s.provider, JSON.stringify(s));
     assert.match(s.url, /^https:\/\//);

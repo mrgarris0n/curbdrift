@@ -43,12 +43,20 @@ function shedRows(s) {
   ];
 }
 
+const floodDepthName = {
+  nuisance: 'NUISANCE PONDING, 4 IN TO 1 FT',
+  deep: 'DEEP PONDING, 1 FT OR MORE',
+};
+
 function puddleRows(p) {
   return [
     { label: 'Saturation Index', value: p.saturation === null ? '—' : p.saturation.toFixed(2) },
-    { label: 'Drainage complaints on file', value: String(p.complaintCount) },
-    { label: 'Most recent complaint', value: day(p.lastComplaint) },
-    { label: 'Nature of complaint', value: p.descriptors.join('; ') },
+    ...(p.floodProne ? [{ label: 'DEP stormwater flood map (modelled)', value: floodDepthName[p.floodDepth] }] : []),
+    { label: 'Drainage complaints on file', value: p.complaintCount ? String(p.complaintCount) : 'NONE ON FILE' },
+    ...(p.complaintCount ? [
+      { label: 'Most recent complaint', value: day(p.lastComplaint) },
+      { label: 'Nature of complaint', value: p.descriptors.join('; ') },
+    ] : []),
     { label: 'Status', value: puddleStatus[p.statusKey] },
   ];
 }

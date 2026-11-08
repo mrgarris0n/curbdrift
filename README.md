@@ -12,7 +12,7 @@ It is a deliberately over-engineered answer to a question nobody asked. The numb
 
 - **Decay map.** Surveys a 400 m radius around you (or Union Square, if location is unavailable) and plots three kinds of items:
   - **S: sheds and scaffolds.** Active DOB permits, scored by how long the structure has stood *continuously*. Yearly permit renewals are chained together, and a gap of 60+ days breaks the chain.
-  - **P: probable puddles.** Locations with repeated 311 flooding or catch-basin complaints, weighted by the last 72 hours of rain minus a drying term from sunshine and temperature.
+  - **P: probable puddles.** Locations with repeated 311 flooding or catch-basin complaints, plus spots where DEP's stormwater flood map says water collects. They are weighted by the last 72 hours of rain (and the heaviest single hour, which fades over about a day) minus a drying term from sunshine and temperature. Spots that are only on the flood map, with no complaints, appear only once it has rained enough to matter.
   - **D: sidewalk defects.** Recent 311 sidewalk-condition reports (collapsed sidewalk, open cellar doors, sign stumps…).
 - **Item files.** Tap anything for its record: years standing, permit renewals, mayors outlasted, owner of record, saturation index.
 - **Area Deterioration Rating.** The mean of the ten worst items' scores (missing slots count as zero), so it rewards both severity and density without saturating in dense blocks.
@@ -28,12 +28,13 @@ It is a deliberately over-engineered answer to a question nobody asked. The numb
 
 ## Data sources
 
-All are free and public. NYC Open Data is reached through this app's own proxy; the weather is fetched directly.
+All are free and public. NYC Open Data is reached through this app's own proxy (the shed permits and the flood map are snapshots instead); the weather is fetched directly.
 
 | Data | Source |
 | --- | --- |
 | Sheds and scaffolds | NYC Open Data — [DOB NOW: Build – Approved Permits](https://data.cityofnewyork.us/d/rbx6-tga4) (`rbx6-tga4`), work types Sidewalk Shed / Supported Scaffold / Suspended Scaffold |
 | Flooding, catch basins, sidewalk defects | NYC Open Data — [311 Service Requests](https://data.cityofnewyork.us/d/erm2-nwe9) (`erm2-nwe9`) |
+| Where water collects | NYC Open Data — [NYC Stormwater Flood Maps](https://data.cityofnewyork.us/d/9i7c-xyvv) (`9i7c-xyvv`), DEP, Moderate Flood (2.13 in/hr) with current sea levels |
 | Rain, sunshine, temperature | [Open-Meteo](https://open-meteo.com/) forecast API (past 72 hours) |
 | Map tiles | © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors |
 | Walking routes | © [openrouteservice.org](https://openrouteservice.org/) by HeiGIT (foot-walking profile) |
@@ -45,7 +46,7 @@ A static site (plain HTML, CSS and ES modules, no framework) plus two small serv
 ```
 index.html, css/        page and the two themes (scoped by [data-theme])
 js/app.js               orchestration: locate → survey → render
-js/sources/*.js         fetching: DOB permits, 311 complaints, weather
+js/sources/*.js         fetching: DOB permits, 311 complaints, flood map, weather
 js/scoring.js           all scoring formulas (facts in, numbers and keys out)
 js/route.js             the itinerary planner
 js/themes/*.js          every user-visible word, one module per theme
@@ -54,11 +55,14 @@ api/socrata.js          proxy to NYC Open Data that adds the app token server-si
 api/route.js            proxy to openrouteservice that adds the routing key server-side
 api/refresh-sheds.js    daily cron target: redeploys so the shed snapshot is rebuilt
 scripts/build.mjs       deploy build: copies the site, writes data/sheds.json
+scripts/flood-points.py manual, offline: flood map → assets/flood.json (committed)
 ```
 
 The browser calls `/api/socrata` and `/api/route` rather than the upstream services, so the Socrata app token and the openrouteservice key stay on the server. `/api/route` only routes short walks inside New York City. The proxy only accepts the 311 dataset and the query fields the app uses, caps the row count, and caches successful answers at the edge for 5 minutes.
 
 Shed permits change once a day, so they don't go through the proxy. Each build downloads every shed and scaffold permit (about 185,000 rows), groups them into active structures (about 13,000) and writes them to the static file `data/sheds.json` (about 0.5 MB gzipped). The browser reads that file and keeps the structures inside the survey circle. A Vercel cron calls `/api/refresh-sheds` every morning, which triggers a redeploy through a deploy hook. If the download fails, or returns suspiciously few structures, the build fails and the previous deployment, with its snapshot, stays live.
+
+The flood map is different: it is a static model (last published 2024) that DEP distributes only as Esri File Geodatabases, which plain Node can't read. So `scripts/flood-points.py` converts it by hand, not in the build. It samples the Moderate Flood scenario's ponding areas (4 inches to 1 foot, and 1 foot or more) into about 32,000 points at least 30 m apart, and writes them to `assets/flood.json` (about 150 KB gzipped), which is committed. Re-run it when DEP republishes the dataset; the script's header says how. The browser joins those points to the 311 puddle clusters within 30 m. A cluster on the map counts fully, a cluster off it counts at 0.6, and a map spot nobody has complained about becomes a puddle of its own once the Saturation Index reaches 15.
 
 ## Running it
 

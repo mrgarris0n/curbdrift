@@ -13,12 +13,18 @@ const puddles = ['dormant', 'probable', 'peak', 'unknown'].map((statusKey, i) =>
   kind: 'P', id: `p${i}`, lat: 0, lon: 0, complaintCount: 3, lastComplaint: new Date('2026-10-10T00:00:00Z'),
   descriptors: ['Street Flooding (SJ)'], saturation: statusKey === 'unknown' ? null : 40, statusKey, score: 40, code: `P-${i + 1}`,
 }));
+// Flood-map puddles: one that also has complaints, one modelled only (no 311 history at all).
+const floodPuddle = { ...puddles[1], id: 'pf', floodProne: true, floodDepth: 'deep', code: 'P-5' };
+const floodOnly = {
+  kind: 'P', id: 'F|40.71235,-73.95432', lat: 0, lon: 0, complaintCount: 0, lastComplaint: null, descriptors: [],
+  floodProne: true, floodDepth: 'nuisance', saturation: 25, statusKey: 'probable', score: 25, code: 'P-6',
+};
 const defects = [false, true].map((closed, i) => ({
   kind: 'D', id: `d${i}`, lat: 0, lon: 0, address: '', descriptor: 'Sidewalk Collapsed',
   created: new Date('2026-09-01T00:00:00Z'), closed, score: 70, code: `D-${i + 1}`,
 }));
 const sheds = ['temporary', 'prolonged', 'semiPermanent', 'permanent'].map((classKey) => ({ ...shed, classKey }));
-const items = [...sheds, ...puddles, ...defects];
+const items = [...sheds, ...puddles, floodPuddle, floodOnly, ...defects];
 const route = { stops: [{ ...shed, legM: 130, atM: 130 }, { ...defects[0], legM: 200, atM: 330 }], distanceM: 512.6, minutes: 6, totalScore: 162.1 };
 
 const MESSAGE_KEYS = ['loading', 'empty', 'unavailable', 'defaultLocation', 'provisional', 'final', 'tapHint', 'resurvey',
@@ -71,6 +77,18 @@ for (const theme of Object.values(THEMES)) {
     assert.ok(strings(theme.recordRows(puddles[1])).join(' ').includes('40.00'), `${theme.id} shows the saturation index`);
     assert.ok(strings(theme.routeSummaryRows(route)).join(' ').includes('1.3'), `${theme.id} states the distance method`);
     assert.ok(strings(theme.summaryRows({ S: 3, P: 1, D: 0 }, 42)).join(' ').includes('42.0'));
+  });
+
+  test(`${theme.id}: puddle rows say what the evidence is`, () => {
+    const text = (it) => strings(theme.recordRows(it)).join(' ');
+    assert.match(text(floodPuddle), /flood map/i, `${theme.id} cites the flood map`);
+    assert.match(text(floodPuddle), /1 (ft|foot)/i, `${theme.id} gives the modelled depth`);
+    assert.ok(text(floodPuddle).includes('Street Flooding (SJ)'), `${theme.id} keeps the complaints`);
+    assert.doesNotMatch(text(puddles[1]), /flood map/i, `${theme.id} complaint-only puddle does not claim the map`);
+    assert.match(text(floodOnly), /flood map/i);
+    assert.match(text(floodOnly), /4 in/i, `${theme.id} gives the shallow depth class`);
+    assert.ok(theme.itemTitle(floodOnly).includes('P-6'));
+    for (const r of theme.recordRows(floodOnly)) assert.doesNotMatch(r.value, /undefined|null|NaN|Invalid/, `${theme.id} ${r.label}`);
   });
 
   test(`${theme.id}: route rows list stops in order, then the return`, () => {

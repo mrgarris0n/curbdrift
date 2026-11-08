@@ -58,12 +58,20 @@ function shedRows(s) {
   ];
 }
 
+const floodDepthName = {
+  nuisance: 'Water collects here in a big storm, 4 inches to 1 foot deep',
+  deep: 'Water collects here in a big storm, 1 foot deep or more',
+};
+
 function puddleRows(p) {
   return [
     { label: 'How wet (Saturation Index)', value: p.saturation === null ? '—' : p.saturation.toFixed(2) },
-    { label: 'Times someone complained', value: String(p.complaintCount) },
-    { label: 'Last complaint', value: day(p.lastComplaint) },
-    { label: 'What they said', value: p.descriptors.join('; ') },
+    ...(p.floodProne ? [{ label: "The city's stormwater flood map", value: floodDepthName[p.floodDepth] }] : []),
+    { label: 'Times someone complained', value: p.complaintCount ? String(p.complaintCount) : 'Nobody has, yet' },
+    ...(p.complaintCount ? [
+      { label: 'Last complaint', value: day(p.lastComplaint) },
+      { label: 'What they said', value: p.descriptors.join('; ') },
+    ] : []),
     { label: 'Chances it is there', value: puddleStatus[p.statusKey] },
   ];
 }

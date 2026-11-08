@@ -6,6 +6,7 @@ export const CREDITS = Object.freeze({
   sources: Object.freeze([
     { name: 'DOB NOW: Build – Approved Permits', provider: 'NYC Department of Buildings, via NYC Open Data', url: 'https://data.cityofnewyork.us/d/rbx6-tga4' },
     { name: '311 Service Requests', provider: 'NYC 311, via NYC Open Data', url: 'https://data.cityofnewyork.us/d/erm2-nwe9' },
+    { name: 'NYC Stormwater Flood Map (Moderate Flood, current sea levels)', provider: 'NYC Department of Environmental Protection, via NYC Open Data', url: 'https://data.cityofnewyork.us/d/9i7c-xyvv' },
     { name: 'Weather forecast and history', provider: 'Open-Meteo', url: 'https://open-meteo.com/' },
     { name: 'Map data and tiles', provider: '© OpenStreetMap contributors', url: 'https://www.openstreetmap.org/copyright' },
     { name: 'Walking routes', provider: '© openrouteservice.org by HeiGIT', url: 'https://openrouteservice.org/' },
