@@ -4,14 +4,14 @@ const ENDPOINT = 'https://api.open-meteo.com/v1/forecast';
 const HOUR_MS = 3600000;
 const RAIN_HOUR_MM = 0.2;
 
-/** @typedef {{rain72hMm:number, hoursSinceRain:number|null, peakHourMm72h:number, hoursSincePeak:number|null, dryingKWh:number, meanTempC:number}} WeatherSummary */
+/** @typedef {{rain72hMm:number, hoursSinceRain:number|null, peakHourMm72h:number, hoursSincePeak:number|null, evaporationMm:number}} WeatherSummary */
 
-/** Hourly rain, sun and temperature around center. Times come back in GMT (no zone suffix). */
+/** Hourly rain and FAO-56 reference evapotranspiration (ET0) around center. Times come back in GMT (no zone suffix). */
 export async function fetchWeather(center, { fetchImpl = globalThis.fetch, timeoutMs = 15000, signal } = {}) {
   const params = new URLSearchParams({
     latitude: center.lat.toFixed(4),
     longitude: center.lon.toFixed(4),
-    hourly: 'precipitation,shortwave_radiation,temperature_2m',
+    hourly: 'precipitation,et0_fao_evapotranspiration',
     past_days: '3',
     forecast_days: '1',
     timezone: 'GMT',
@@ -20,7 +20,7 @@ export async function fetchWeather(center, { fetchImpl = globalThis.fetch, timeo
   if (!res.ok) throw new Error(`weather HTTP ${res.status}`);
   const body = await res.json();
   const h = body?.hourly;
-  const arrays = [h?.time, h?.precipitation, h?.shortwave_radiation, h?.temperature_2m];
+  const arrays = [h?.time, h?.precipitation, h?.et0_fao_evapotranspiration];
   if (!arrays.every(Array.isArray)) throw new Error('weather: unexpected response');
   return body.hourly;
 }
@@ -31,8 +31,8 @@ export async function fetchWeather(center, { fetchImpl = globalThis.fetch, timeo
  * - hoursSinceRain: hours since the last hour with ≥ 0.2 mm, or null
  * - peakHourMm72h: precipitation in the wettest single hour of the window
  * - hoursSincePeak: hours since that hour (the latest one on a tie), or null if no hour had ≥ 0.2 mm
- * - dryingKWh: Σ shortwave radiation (W/m² over 1h = Wh/m²) after the last rain hour, ÷ 1000
- * - meanTempC: mean temperature over those drying hours (or the whole window if none)
+ * - evaporationMm: Σ ET0 (mm) over the hours after the last rain hour (0 if it did not rain).
+ *   ET0 already folds in sun, temperature, wind and humidity.
  * @returns {WeatherSummary}
  */
 export function summarizeWeather(hourly, now) {
@@ -41,7 +41,7 @@ export function summarizeWeather(hourly, now) {
   hourly.time.forEach((t, i) => {
     const ms = Date.parse(`${t}:00Z`);
     if (Number.isFinite(ms) && ms > start && ms <= now.getTime()) {
-      hours.push({ ms, p: hourly.precipitation[i] ?? 0, sw: hourly.shortwave_radiation[i] ?? 0, t: hourly.temperature_2m[i] });
+      hours.push({ ms, p: hourly.precipitation[i] ?? 0, e: hourly.et0_fao_evapotranspiration[i] ?? 0 });
     }
   });
 
@@ -54,14 +54,12 @@ export function summarizeWeather(hourly, now) {
   });
   const hoursAgo = (i) => (i >= 0 ? Math.round((now.getTime() - hours[i].ms) / HOUR_MS) : null);
   const after = lastRain >= 0 ? hours.slice(lastRain + 1) : [];
-  const tempHours = (after.length ? after : hours).filter((h) => Number.isFinite(h.t));
 
   return {
     rain72hMm,
     hoursSinceRain: hoursAgo(lastRain),
     peakHourMm72h: peak >= 0 ? hours[peak].p : 0,
     hoursSincePeak: hoursAgo(peak),
-    dryingKWh: after.reduce((a, h) => a + h.sw, 0) / 1000,
-    meanTempC: tempHours.length ? tempHours.reduce((a, h) => a + h.t, 0) / tempHours.length : 0,
+    evaporationMm: Math.round(after.reduce((a, h) => a + h.e, 0) * 100) / 100,
   };
 }

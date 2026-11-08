@@ -11,7 +11,9 @@
  *     score           = min(100, yearsContinuous / 9 × 100)   (9 years ≈ all of DOB NOW history)
  *
  *   Puddle (P) — "Saturation Index", 0–100, two decimals; null when weather is unknown
- *     effectiveWater = max(0, rain72hMm − 1.2 × dryingKWh × (1 + max(0, meanTempC)/25))
+ *     effectiveWater = max(0, rain72hMm − 1.05 × evaporationMm)
+ *                      (evaporationMm = Σ FAO-56 reference evapotranspiration ET0 since the last rain;
+ *                       1.05 is FAO-56 Table 12's coefficient for shallow open water)
  *     intensity      = min(peakHourMm72h / 7.6, 1)          (7.6 mm/h = 0.3 in/h, AMS "heavy rain";
  *                                                          also the best reference against FloodNet)
  *     burst          = intensity × exp(−hoursSincePeak / 24)  (0 when there was no rain hour)
@@ -74,6 +76,9 @@ export function areaRating(scoredItems) {
 }
 
 const HEAVY_RAIN_MM_H = 7.6;
+// FAO-56 Table 12, "Open Water, < 2 m depth": evaporation = 1.05 × ET0. Dark asphalt absorbs more
+// sun than ET0's reference grass, so real puddles may dry a little faster; this is the cautious end.
+const OPEN_WATER_KC = 1.05;
 
 /**
  * How much one complaint of each kind says about pooling water: the share of that descriptor's
@@ -94,8 +99,7 @@ export const DESCRIPTOR_WEIGHT = Object.freeze({
 /** facts: {byDescriptor, floodProne}. */
 export function saturationIndex({ byDescriptor, floodProne }, weather) {
   if (!weather) return null;
-  const tempFactor = 1 + Math.max(0, weather.meanTempC) / 25;
-  const effectiveWater = Math.max(0, weather.rain72hMm - 1.2 * weather.dryingKWh * tempFactor);
+  const effectiveWater = Math.max(0, weather.rain72hMm - OPEN_WATER_KC * weather.evaporationMm);
   const intensity = Math.min((weather.peakHourMm72h ?? 0) / HEAVY_RAIN_MM_H, 1);
   const burst = weather.hoursSincePeak == null ? 0 : intensity * Math.exp(-weather.hoursSincePeak / 24);
   const wetness = Math.max(Math.min(effectiveWater / 20, 1), burst);

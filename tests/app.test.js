@@ -105,7 +105,7 @@ test('gatherSurvey hands its cancellation signal to every source', async () => {
   await gatherSurvey({ lat: 0, lon: 0 }, new Date(), {
     fetchSheds: spy([]),
     fetchComplaints: spy({ puddles: [], defects: [] }),
-    fetchWeather: spy({ time: [], precipitation: [], shortwave_radiation: [], temperature_2m: [] }),
+    fetchWeather: spy({ time: [], precipitation: [], et0_fao_evapotranspiration: [] }),
     fetchFlood: spy([]),
   }, undefined, signal);
   assert.deepEqual(seen, [true, true, true, true]);
@@ -114,7 +114,7 @@ test('gatherSurvey hands its cancellation signal to every source', async () => {
 // Hourly weather on the real clock: `mm` of rain in the last hour (or none), no sun.
 const hourlyRain = (mm) => {
   const t = new Date(Date.now() - 3600000).toISOString().slice(0, 16);
-  return { time: [t], precipitation: [mm], shortwave_radiation: [0], temperature_2m: [10] };
+  return { time: [t], precipitation: [mm], et0_fao_evapotranspiration: [0] };
 };
 const near = { lat: 0.0001, lon: 0, deep: true }; // ~11 m from facts.puddle
 const away = { lat: 0.002, lon: 0, deep: false }; // ~220 m away
