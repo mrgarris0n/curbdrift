@@ -95,3 +95,13 @@ test('rejects unknown cities', async () => {
   }
   assert.equal(u.calls.length, 0);
 });
+
+test('city=chicago forwards to the Chicago portal; datasets do not cross cities', async () => {
+  const u = upstream([]);
+  assert.equal((await handleSocrata(req('city=chicago&dataset=v6vf-nfxy&%24limit=5'), { token: 't', fetchImpl: u.impl })).status, 200);
+  assert.match(u.calls[0].url, /^https:\/\/data\.cityofchicago\.org\/resource\/v6vf-nfxy\.json\?%24limit=5$/);
+  assert.equal(u.calls[0].init.headers['X-App-Token'], 't');
+  assert.equal((await handleSocrata(req('city=chicago&dataset=erm2-nwe9'), { token: 't', fetchImpl: u.impl })).status, 400);
+  assert.equal((await handleSocrata(req('city=nyc&dataset=v6vf-nfxy'), { token: 't', fetchImpl: u.impl })).status, 400);
+  assert.equal(u.calls.length, 1);
+});

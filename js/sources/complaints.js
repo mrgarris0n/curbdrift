@@ -50,47 +50,58 @@ export function buildComplaintParams(center, radiusM, today) {
   };
 }
 
-/** @returns {{puddles: PuddleFacts[], defects: DefectFacts[]}} */
-export function splitComplaints(rows, today) {
+/**
+ * Sort complaints, already in the shared shape {id, kind: 'P'|'D', lat, lon, created, descriptor,
+ * address, closed}, into puddle clusters and defects: puddles within PUDDLE_WINDOW_MONTHS,
+ * clustered greedily within clusterM (New York: CLUSTER_M); defects within DEFECT_WINDOW_MONTHS.
+ * @returns {{puddles: PuddleFacts[], defects: DefectFacts[]}}
+ */
+export function sortComplaints(complaints, today, { clusterM = CLUSTER_M } = {}) {
   const puddleSince = monthsBefore(today, PUDDLE_WINDOW_MONTHS);
   const defectSince = monthsBefore(today, DEFECT_WINDOW_MONTHS);
   const clusters = [];
   const defects = [];
 
-  for (const r of rows) {
-    const lat = Number.parseFloat(r.latitude);
-    const lon = Number.parseFloat(r.longitude);
-    const created = parseApiDate(r.created_date);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !created) continue;
-
-    if (PUDDLE_TYPES.has(r.complaint_type) && PUDDLE_SET.has(r.descriptor)) {
+  for (const { id, kind, lat, lon, created, descriptor, address, closed } of complaints) {
+    if (kind === 'P') {
       if (created < puddleSince) continue;
-      // Greedy clustering: join the first cluster whose anchor point is within CLUSTER_M.
+      // Greedy clustering: join the first cluster whose anchor point is within clusterM.
       const here = { lat, lon };
-      const c = clusters.find((k) => distanceM(k, here) <= CLUSTER_M);
+      const c = clusters.find((k) => distanceM(k, here) <= clusterM);
       if (c) {
         c.complaintCount += 1;
         if (created > c.lastComplaint) c.lastComplaint = created;
-        if (!c.descriptors.includes(r.descriptor)) c.descriptors.push(r.descriptor);
-        c.byDescriptor[r.descriptor] = (c.byDescriptor[r.descriptor] ?? 0) + 1;
+        if (!c.descriptors.includes(descriptor)) c.descriptors.push(descriptor);
+        c.byDescriptor[descriptor] = (c.byDescriptor[descriptor] ?? 0) + 1;
       } else {
-        clusters.push({ kind: 'P', id: `P|${r.unique_key}`, lat, lon, complaintCount: 1, lastComplaint: created, descriptors: [r.descriptor], byDescriptor: { [r.descriptor]: 1 } });
+        clusters.push({ kind: 'P', id: `P|${id}`, lat, lon, complaintCount: 1, lastComplaint: created, descriptors: [descriptor], byDescriptor: { [descriptor]: 1 } });
       }
-    } else if (r.complaint_type === 'Sidewalk Condition' && DEFECT_SET.has(r.descriptor)) {
+    } else if (kind === 'D') {
       if (created < defectSince) continue;
-      defects.push({
-        kind: 'D',
-        id: `D|${r.unique_key}`,
-        lat,
-        lon,
-        address: String(r.incident_address ?? '').replace(/\s+/g, ' ').trim(),
-        descriptor: r.descriptor,
-        created,
-        closed: r.status === 'Closed',
-      });
+      defects.push({ kind: 'D', id: `D|${id}`, lat, lon, address, descriptor, created, closed });
     }
   }
   return { puddles: clusters, defects };
+}
+
+/** A New York 311 row in the shared complaint shape, or null if it is not one the app uses. */
+function normalize(r) {
+  const lat = Number.parseFloat(r.latitude);
+  const lon = Number.parseFloat(r.longitude);
+  const created = parseApiDate(r.created_date);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || !created) return null;
+  const kind = PUDDLE_TYPES.has(r.complaint_type) && PUDDLE_SET.has(r.descriptor) ? 'P'
+    : r.complaint_type === 'Sidewalk Condition' && DEFECT_SET.has(r.descriptor) ? 'D' : null;
+  if (!kind) return null;
+  return {
+    id: r.unique_key, kind, lat, lon, created, descriptor: r.descriptor,
+    address: String(r.incident_address ?? '').replace(/\s+/g, ' ').trim(), closed: r.status === 'Closed',
+  };
+}
+
+/** @returns {{puddles: PuddleFacts[], defects: DefectFacts[]}} */
+export function splitComplaints(rows, today) {
+  return sortComplaints(rows.map(normalize).filter(Boolean), today);
 }
 
 export async function fetchComplaints(center, radiusM, opts) {

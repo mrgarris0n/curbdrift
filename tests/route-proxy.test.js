@@ -92,3 +92,12 @@ test('upstream errors pass their status through, uncached; a malformed answer is
   const down = async () => { throw new TypeError('fetch failed'); };
   assert.equal((await handleRoute(req({ points: [UNION_SQ, NEAR] }), { key: 'k', fetchImpl: down })).status, 502);
 });
+
+test('routes walks inside Chicago, but never across cities', async () => {
+  const LOOP = { lat: 41.8819, lon: -87.6278 };
+  const LOOP_NEAR = { lat: 41.8835, lon: -87.6290 };
+  const u = upstream(orsAnswer);
+  assert.equal((await handleRoute(req({ points: [LOOP, LOOP_NEAR, LOOP] }), { key: 'k', fetchImpl: u.impl })).status, 200);
+  assert.equal((await handleRoute(req({ points: [UNION_SQ, LOOP] }), { key: 'k', fetchImpl: u.impl })).status, 400);
+  assert.equal(u.calls.length, 1);
+});

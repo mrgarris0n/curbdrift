@@ -94,7 +94,17 @@ export const DESCRIPTOR_WEIGHT = Object.freeze({
   'Catch Basin Sunken': 0.2,
   'Catch Basin Grating Missing (SA4)': 0.2,
   'Catch Basin Sunken/Damaged/Raised (SC1)': 0,
+  // Chicago 311 request types (same method, Midway rain): see scripts/calibrate-puddles.py.
+  'Water On Street Complaint': 1,
+  'Alley Sewer Inspection Request': 0.6,
+  'Sewer Cleaning Inspection Request': 0.5,
+  'Sewer Cave-In Inspection Request': 0.2,
 });
+
+/** Complaints counted by how much each kind says about pooling water (DESCRIPTOR_WEIGHT). */
+export function weightedComplaints(byDescriptor) {
+  return Object.entries(byDescriptor).reduce((sum, [d, n]) => sum + n * DESCRIPTOR_WEIGHT[d], 0);
+}
 
 /** facts: {byDescriptor, floodProne}. */
 export function saturationIndex({ byDescriptor, floodProne }, weather) {
@@ -103,8 +113,7 @@ export function saturationIndex({ byDescriptor, floodProne }, weather) {
   const intensity = Math.min((weather.peakHourMm72h ?? 0) / HEAVY_RAIN_MM_H, 1);
   const burst = weather.hoursSincePeak == null ? 0 : intensity * Math.exp(-weather.hoursSincePeak / 24);
   const wetness = Math.max(Math.min(effectiveWater / 20, 1), burst);
-  const weighted = Object.entries(byDescriptor).reduce((sum, [d, n]) => sum + n * DESCRIPTOR_WEIGHT[d], 0);
-  const repeat = Math.min(weighted, 5) / 5;
+  const repeat = Math.min(weightedComplaints(byDescriptor), 5) / 5;
   const susceptibility = floodProne ? 1 : 0.8;
   return round(100 * wetness * susceptibility * (0.5 + 0.5 * repeat), 2);
 }

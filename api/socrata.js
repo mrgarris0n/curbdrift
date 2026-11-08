@@ -6,6 +6,7 @@
 
 const CITIES = {
   nyc: { upstream: 'https://data.cityofnewyork.us/resource/', datasets: new Set(['erm2-nwe9']) }, // 311 requests
+  chicago: { upstream: 'https://data.cityofchicago.org/resource/', datasets: new Set(['v6vf-nfxy']) }, // 311 requests
 };
 // Before cities existed, the app sent no city: a tab left open across a deploy still means New York.
 const DEFAULT_CITY = 'nyc';
