@@ -12,11 +12,13 @@
  *
  *   Puddle (P) — "Saturation Index", 0–100, two decimals; null when weather is unknown
  *     effectiveWater = max(0, rain72hMm − 1.2 × dryingKWh × (1 + max(0, meanTempC)/25))
- *     intensity      = min(peakHourMm72h / 7.6, 1)          (7.6 mm/h = 0.3 in/h, AMS "heavy rain")
+ *     intensity      = min(peakHourMm72h / 7.6, 1)          (7.6 mm/h = 0.3 in/h, AMS "heavy rain";
+ *                                                          also the best reference against FloodNet)
  *     burst          = intensity × exp(−hoursSincePeak / 24)  (0 when there was no rain hour)
  *     wetness        = max(min(effectiveWater / 20, 1), burst)
- *     susceptibility = floodProne ? 1 : 0.6   (on DEP's stormwater flood map; complaint-only spots
- *                                             show a drainage problem but less evidence of pooling)
+ *     susceptibility = floodProne ? 1 : 0.8   (on DEP's stormwater flood map or not. FloodNet sensors
+ *                                             off the map flood 0.78× as often as those on it, at equal
+ *                                             storm intensity: scripts/calibrate-puddles.py)
  *     repeat         = min(complaintCount, 5) / 5
  *     saturation     = 100 × wetness × susceptibility × (0.5 + 0.5 × repeat)
  *     The burst lets a short downpour outrun the drains even when the 72h total is modest or
@@ -81,7 +83,7 @@ export function saturationIndex({ complaintCount, floodProne }, weather) {
   const burst = weather.hoursSincePeak == null ? 0 : intensity * Math.exp(-weather.hoursSincePeak / 24);
   const wetness = Math.max(Math.min(effectiveWater / 20, 1), burst);
   const repeat = Math.min(complaintCount, 5) / 5;
-  const susceptibility = floodProne ? 1 : 0.6;
+  const susceptibility = floodProne ? 1 : 0.8;
   return round(100 * wetness * susceptibility * (0.5 + 0.5 * repeat), 2);
 }
 

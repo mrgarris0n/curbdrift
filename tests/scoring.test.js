@@ -124,10 +124,11 @@ test('saturationIndex: a burst still counts when sun has offset the 72h total', 
 // Flood-map susceptibility.
 const WET = { rain72hMm: 30, dryingKWh: 0, meanTempC: 10 };
 
-test('saturationIndex: complaint-only spots weigh 0.6 of flood-prone ones', async () => {
-  const { saturationIndex } = await import('../js/scoring.js');
+test('saturationIndex: complaint-only spots weigh 0.8 of flood-prone ones (FloodNet calibration)', async () => {
+  const { saturationIndex, puddleStatus } = await import('../js/scoring.js');
   assert.equal(saturationIndex({ complaintCount: 5, floodProne: true }, WET), 100);
-  assert.equal(saturationIndex({ complaintCount: 5, floodProne: false }, WET), 60);
+  assert.equal(saturationIndex({ complaintCount: 5, floodProne: false }, WET), 80);
+  assert.equal(puddleStatus(saturationIndex({ complaintCount: 5, floodProne: false }, WET)), 'peak');
 });
 
 test('saturationIndex: a flood-only spot with no complaints tops out at 50', async () => {
