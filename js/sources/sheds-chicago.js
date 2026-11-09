@@ -5,6 +5,9 @@ import { parseApiDate, isoDay, DAY_MS } from '../dates.js';
 
 export const CHICAGO_SHED_DATASET = 'ydr8-5enu';
 export const SNAPSHOT_URL = '/data/sheds-chicago.json';
+// Bump when toSnapshot's output changes for the same rows (tests/snapshot-format.test.js notices):
+// builds reuse production's snapshot only if it was made with the same format (scripts/snapshots.mjs).
+export const SNAPSHOT_FORMAT = 1;
 
 // "PERMIT - SCAFFOLDING" until 2023, then express permits for "TEMPORARY SCAFFOLDING… PERMIT
 // EXPIRATION DATE: 365 DAYS FROM PERMIT ISSUED DATE". Older permits state a one-year range in

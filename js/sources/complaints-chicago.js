@@ -11,6 +11,9 @@ import { PUDDLE_WINDOW_MONTHS } from '../config.js';
 export const CHICAGO_311_DATASET = 'v6vf-nfxy';
 // Built daily like New York's (see SNAPSHOT_URL in complaints.js).
 export const SNAPSHOT_URL = '/data/complaints-chicago.json';
+// Bump when toSnapshot's output changes for the same rows (tests/snapshot-format.test.js notices):
+// builds reuse production's snapshot only if it was made with the same format (scripts/snapshots.mjs).
+export const SNAPSHOT_FORMAT = 1;
 
 // Request types that concentrate on rain days (weights in js/scoring.js, from
 // scripts/calibrate-puddles.py). "Water in Basement Complaint" is rain-driven too, but indoors.

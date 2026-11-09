@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSnapshot, snapshotOrLiveCopy, SOURCES } from '../scripts/snapshots.mjs';
+import { buildSnapshot, snapshotFor, snapshotVersion, SOURCES, REUSE_MAX_AGE_MS } from '../scripts/snapshots.mjs';
 
 const source = (id) => SOURCES.find((s) => s.id === id);
 const NYC = source('nyc sheds');
@@ -84,42 +84,78 @@ test('Chicago complaints come from Chicago\'s 311 dataset', async () => {
   assert.equal(calls[0].href, 'https://data.cityofchicago.org/api/v3/views/v6vf-nfxy/query.json');
 });
 
-test('a snapshot that cannot be built falls back to production\'s copy', async () => {
-  const live = { generatedAt: '2026-11-05T09:00:00.000Z', types: [], complaints: [[]] };
+// snapshotFor: production (curbdrift.example) serves `copy`; Socrata answers with `socrata`.
+function world({ copy = null, socrata = () => ok([row('a')]) } = {}) {
   const urls = [];
   const fetchImpl = async (url) => {
     urls.push(String(url));
-    return String(url).startsWith('https://curbdrift.example/') ? ok(live) : new Response('busy', { status: 503 });
+    if (String(url).startsWith('https://curbdrift.example/')) return copy ? ok(copy) : new Response('not found', { status: 404 });
+    return socrata();
   };
+  const socrataCalls = () => urls.filter((u) => !u.startsWith('https://curbdrift.example/')).length;
+  return { fetchImpl, urls, socrataCalls };
+}
+const hoursAgo = (h) => new Date(NOW - h * 3600 * 1000).toISOString();
+const copyOf = (source, { version = snapshotVersion(source), generatedAt = hoursAgo(2) } = {}) => ({ generatedAt, version, sheds: [], types: [], complaints: [] });
+const opts = (w) => ({ host: 'curbdrift.example', token: 'secret', fetchImpl: w.fetchImpl, now: NOW, retryDelayMs: 1, min: 1 });
+const quietly = async (fn) => {
   const warn = console.warn;
   console.warn = () => {};
-  try {
-    const got = await snapshotOrLiveCopy(source('nyc complaints'), { token: 'secret', host: 'curbdrift.example', fetchImpl, now: NOW, retryDelayMs: 1 });
-    assert.deepEqual(got, { snapshot: live, rows: null });
-    assert.equal(urls.at(-1), 'https://curbdrift.example/data/complaints.json');
-  } finally {
-    console.warn = warn;
+  try { return await fn(); } finally { console.warn = warn; }
+};
+
+test('a recent production copy of the same version is reused, without asking Socrata', async () => {
+  const copy = copyOf(NYC);
+  const w = world({ copy });
+  const got = await snapshotFor(NYC, opts(w));
+  assert.deepEqual(got, { snapshot: copy, from: 'reused' });
+  assert.deepEqual(w.urls, ['https://curbdrift.example/data/sheds.json']);
+});
+
+test('a copy older than the reuse age is downloaded again (the daily cron\'s case)', async () => {
+  assert.equal(REUSE_MAX_AGE_MS, 12 * 3600 * 1000);
+  const w = world({ copy: copyOf(NYC, { generatedAt: hoursAgo(24) }) });
+  const got = await snapshotFor(NYC, opts(w));
+  assert.equal(got.from, 'downloaded');
+  assert.equal(got.rows, 1);
+  assert.equal(got.snapshot.version, snapshotVersion(NYC));
+  assert.equal(got.snapshot.generatedAt, NOW.toISOString());
+});
+
+test('a copy of another version, or none, is never reused, however recent', async () => {
+  const unversioned = copyOf(NYC);
+  delete unversioned.version; // as the snapshots made before versions existed
+  for (const copy of [copyOf(NYC, { version: '0-000000000000' }), unversioned]) {
+    const w = world({ copy });
+    const got = await snapshotFor(NYC, opts(w));
+    assert.equal(got.from, 'downloaded', String(copy.version));
+    assert.equal(w.socrataCalls(), 1);
   }
 });
 
-test('with no production copy either, the build fails', async () => {
-  const fetchImpl = async () => new Response('busy', { status: 503 });
-  const warn = console.warn;
-  console.warn = () => {};
-  try {
-    await assert.rejects(snapshotOrLiveCopy(NYC, { token: 'secret', host: 'curbdrift.example', fetchImpl, now: NOW, retryDelayMs: 1 }), /HTTP 503.*production's copy unavailable too/);
-    await assert.rejects(snapshotOrLiveCopy(NYC, { token: 'secret', host: undefined, fetchImpl, now: NOW, retryDelayMs: 1 }), /HTTP 503/);
-  } finally {
-    console.warn = warn;
-  }
+test('a failed download falls back to production\'s copy of the same version, whatever its age', async () => {
+  const copy = copyOf(NYC, { generatedAt: hoursAgo(72) });
+  const w = world({ copy, socrata: () => new Response('busy', { status: 503 }) });
+  const got = await quietly(() => snapshotFor(NYC, opts(w)));
+  assert.deepEqual(got, { snapshot: copy, from: 'fallback' });
 });
 
-test('a building snapshot that succeeds never touches production', async () => {
-  const urls = [];
-  const fetchImpl = async (url) => { urls.push(String(url)); return ok([row('a')]); };
-  const { rows } = await snapshotOrLiveCopy(NYC, { token: 'secret', host: 'curbdrift.example', fetchImpl, now: NOW, min: 1 });
-  assert.equal(rows, 1);
-  assert.ok(urls.every((u) => !u.includes('curbdrift.example')));
+test('a failed download with no usable copy fails the build, saying why', async () => {
+  const failing = { socrata: () => new Response('busy', { status: 503 }) };
+  await assert.rejects(snapshotFor(NYC, opts(world(failing))), /HTTP 503.*production's copy unavailable: HTTP 404/);
+  await assert.rejects(snapshotFor(NYC, opts(world({ ...failing, copy: copyOf(NYC, { version: '0-old', generatedAt: hoursAgo(1) }) }))), /HTTP 503.*copy is version 0-old, this build needs 1-/);
+  await assert.rejects(snapshotFor(NYC, { ...opts(world(failing)), host: undefined }), /HTTP 503.*no production domain/);
+});
+
+test('the version follows the format number and the query, not the date', () => {
+  const v = snapshotVersion(NYC);
+  assert.match(v, /^1-[0-9a-f]{12}$/);
+  assert.equal(snapshotVersion({ ...NYC }), v);
+  assert.notEqual(snapshotVersion({ ...NYC, format: 2 }), v);
+  assert.notEqual(snapshotVersion({ ...NYC, query: () => ({ ...NYC.query(), $where: 'x' }) }), v);
+  const complaintsSource = source('nyc complaints');
+  assert.notEqual(complaintsSource.query(NOW).$where, complaintsSource.query(new Date(0)).$where, 'the query itself moves with the date');
+  assert.equal(snapshotVersion(complaintsSource), snapshotVersion(complaintsSource), 'the version does not');
 });
 
 test('without an app token the build stops before asking (SODA 3 requires one)', async () => {
