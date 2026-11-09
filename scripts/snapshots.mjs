@@ -31,8 +31,9 @@ export const SOURCES = [
   { id: 'chicago complaints', file: 'complaints-chicago.json', upstream: CHICAGO, dataset: chicagoComplaints.CHICAGO_311_DATASET, query: chicagoComplaints.snapshotQuery, toSnapshot: chicagoComplaints.toSnapshot, count: complaints, min: 10000 },
 ];
 
-async function fetchPage(url, headers, fetchImpl, retryDelayMs) {
+async function fetchPage(label, url, headers, fetchImpl, retryDelayMs) {
   for (let attempt = 1; ; attempt += 1) {
+    const started = Date.now();
     try {
       const res = await fetchImpl(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -41,6 +42,8 @@ async function fetchPage(url, headers, fetchImpl, retryDelayMs) {
       return rows;
     } catch (err) {
       if (attempt >= ATTEMPTS) throw new Error(`${url} failed: ${err.message}`);
+      // A download can wait out several minutes of refusals; say so, or the build log looks hung.
+      console.warn(`build: ${label}: attempt ${attempt}/${ATTEMPTS} failed after ${((Date.now() - started) / 1000).toFixed(1)} s: ${err.message}`);
       await new Promise((r) => setTimeout(r, retryDelayMs * attempt));
     }
   }
@@ -52,8 +55,9 @@ export async function buildSnapshot(source, { token = process.env.SOCRATA_APP_TO
   const rows = [];
   for (let offset = 0; ; offset += PAGE) {
     const params = new URLSearchParams({ ...source.query(now), $limit: String(PAGE), $offset: String(offset) });
-    const page = await fetchPage(`${source.upstream}${source.dataset}.json?${params}`, headers, fetchImpl, retryDelayMs);
+    const page = await fetchPage(`${source.id} rows ${offset}+`, `${source.upstream}${source.dataset}.json?${params}`, headers, fetchImpl, retryDelayMs);
     rows.push(...page);
+    console.log(`build: ${source.id}: ${rows.length} rows so far`);
     if (page.length < PAGE) break;
   }
   const snapshot = source.toSnapshot(rows, now);
