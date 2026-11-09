@@ -10,6 +10,9 @@ const WORK_TYPES = ['Sidewalk Shed', 'Supported Scaffold', 'Suspended Scaffold']
 // The permits change once a day, so the deploy build turns them into one citywide snapshot
 // (scripts/snapshots.mjs) and the browser reads that static file instead of the API.
 export const SNAPSHOT_URL = '/data/sheds.json';
+// Bump when toSnapshot's output changes for the same rows (tests/snapshot-format.test.js notices):
+// builds reuse production's snapshot only if it was made with the same format (scripts/snapshots.mjs).
+export const SNAPSHOT_FORMAT = 1;
 
 /** @typedef {{kind:'S', id:string, lat:number, lon:number, address:string, workType:string,
  *   chainStart:Date, renewals:number, latestExpiry:Date, owner:string, contractor:string}} ShedFacts */

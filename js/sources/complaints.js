@@ -10,6 +10,9 @@ export const DATASET = 'erm2-nwe9';
 // daily, and the browser keeps the ones in the survey circle. A day's lag is nothing next to the
 // 12-month window.
 export const SNAPSHOT_URL = '/data/complaints.json';
+// Bump when toSnapshot's output changes for the same rows (tests/snapshot-format.test.js notices):
+// builds reuse production's snapshot only if it was made with the same format (scripts/snapshots.mjs).
+export const SNAPSHOT_FORMAT = 1;
 // Complaints this close together are one puddle; flood-map spots this close to one belong to it.
 export const CLUSTER_M = 30;
 
