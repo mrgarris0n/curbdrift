@@ -11,7 +11,8 @@ import * as chicagoComplaints from '../js/sources/complaints-chicago.js';
 
 const PAGE = 50000;
 const TIMEOUT_MS = 120000;
-const ATTEMPTS = 3;
+// Socrata refuses (503/429) in bursts of a minute or more; wait them out before giving up.
+const ATTEMPTS = 5;
 
 const NYC = 'https://data.cityofnewyork.us/resource/';
 const CHICAGO = 'https://data.cityofchicago.org/resource/';
@@ -45,7 +46,7 @@ async function fetchPage(url, headers, fetchImpl, retryDelayMs) {
   }
 }
 
-export async function buildSnapshot(source, { token = process.env.SOCRATA_APP_TOKEN ?? '', fetchImpl = globalThis.fetch, now = new Date(), retryDelayMs = 5000, min = source.min } = {}) {
+export async function buildSnapshot(source, { token = process.env.SOCRATA_APP_TOKEN ?? '', fetchImpl = globalThis.fetch, now = new Date(), retryDelayMs = 15000, min = source.min } = {}) {
   const headers = { accept: 'application/json' };
   if (token) headers['X-App-Token'] = token;
   const rows = [];
