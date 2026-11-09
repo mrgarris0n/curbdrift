@@ -1,5 +1,5 @@
 // Vercel Cron target (see "crons" in vercel.json): triggers a production redeploy through a
-// deploy hook, and the build regenerates the citywide shed snapshot. Only Vercel Cron may call
+// deploy hook, and the build regenerates the citywide shed and 311 snapshots. Only Vercel Cron may call
 // it: Vercel sends CRON_SECRET as a bearer token, and the hook URL itself stays server-side.
 
 function json(body, status) {

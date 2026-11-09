@@ -1,46 +1,16 @@
-import { CACHE_TTL_MS } from '../config.js';
 import { requestSignal } from '../net.js';
 
-// Our own proxy (api/socrata.js) forwards to NYC Open Data and adds the app token server-side.
-const PROXY = '/api/socrata';
-// The 311 radius query alone measured ~7 s; past this the records office is treated as unavailable.
-// Longer than the proxy's own wait for Socrata (UPSTREAM_TIMEOUT_MS in api/socrata.js), so the
-// browser never gives up on an answer the proxy is still waiting for.
-export const REQUEST_TIMEOUT_MS = 100000;
+// The 311 and permit records come from each city's Socrata portal, but the browser never queries
+// it: the deploy build turns them into static snapshots (scripts/snapshots.mjs) that the browser
+// reads from this site. Past this wait the records office is treated as unavailable.
+export const REQUEST_TIMEOUT_MS = 30000;
 
-/** The records office (NYC Open Data) could not be reached or refused the request. */
+/** The records office (a city's open-data snapshot) could not be reached or read. */
 export class RecordsUnavailableError extends Error {
   constructor(message, status = null) {
     super(message);
     this.name = 'RecordsUnavailableError';
     this.status = status;
-  }
-}
-
-function defaultStorage() {
-  try {
-    return globalThis.sessionStorage ?? null;
-  } catch {
-    return null; // access itself can throw when site data is blocked
-  }
-}
-
-function readCache(storage, key, now) {
-  try {
-    const raw = storage?.getItem(key);
-    if (!raw) return null;
-    const { t, rows } = JSON.parse(raw);
-    return now - t < CACHE_TTL_MS && Array.isArray(rows) ? rows : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeCache(storage, key, now, rows) {
-  try {
-    storage?.setItem(key, JSON.stringify({ t: now, rows }));
-  } catch {
-    // quota or privacy mode: run uncached
   }
 }
 
@@ -59,18 +29,4 @@ export async function getRecordsJson(url, { fetchImpl = globalThis.fetch, timeou
   } catch {
     throw new RecordsUnavailableError('unreadable response', res.status);
   }
-}
-
-/** Query a city's Socrata open-data portal through /api/socrata (city: that proxy's city id). Resolves to the row array. */
-export async function socrataQuery(datasetId, params, { city, storage = defaultStorage(), now = Date.now, ...opts } = {}) {
-  const url = `${PROXY}?${new URLSearchParams({ ...(city ? { city } : {}), dataset: datasetId, ...params })}`;
-  const t = now();
-  const cached = readCache(storage, url, t);
-  if (cached) return cached;
-
-  const rows = await getRecordsJson(url, opts);
-  if (!Array.isArray(rows)) throw new RecordsUnavailableError('unexpected response shape');
-
-  writeCache(storage, url, t, rows);
-  return rows;
 }

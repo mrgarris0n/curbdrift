@@ -8,7 +8,7 @@ export const SHED_DATASET = 'rbx6-tga4';
 const WORK_TYPES = ['Sidewalk Shed', 'Supported Scaffold', 'Suspended Scaffold'];
 
 // The permits change once a day, so the deploy build turns them into one citywide snapshot
-// (scripts/shed-snapshot.mjs) and the browser reads that static file instead of the API.
+// (scripts/snapshots.mjs) and the browser reads that static file instead of the API.
 export const SNAPSHOT_URL = '/data/sheds.json';
 
 /** @typedef {{kind:'S', id:string, lat:number, lon:number, address:string, workType:string,

@@ -1,8 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitComplaints, buildComplaintParams, PUDDLE_DESCRIPTORS, DEFECT_DESCRIPTORS } from '../js/sources/complaints.js';
+import { toSnapshot, complaintsAround, snapshotQuery, fetchComplaints, SNAPSHOT_URL, PUDDLE_DESCRIPTORS, DEFECT_DESCRIPTORS } from '../js/sources/complaints.js';
+import { RecordsUnavailableError } from '../js/sources/socrata.js';
 
 const TODAY = new Date('2026-11-06T12:00:00Z');
+const CENTER = { lat: 40.7359, lon: -73.9911 };
+// Rows → the build's snapshot → what the browser finds within 5 km of Union Square.
+const splitComplaints = (rows, today) => complaintsAround(toSnapshot(rows, today), CENTER, 5000, today);
 let key = 0;
 function row(type, descriptor, created, extra = {}) {
   key += 1;
@@ -66,13 +70,44 @@ test('closed flag', () => {
   assert.equal(defects[0].closed, true);
 });
 
-test('params include within_circle and both descriptor lists', () => {
-  const p = buildComplaintParams({ lat: 40.7359, lon: -73.9911 }, 400, TODAY);
-  assert.match(p.$where, /within_circle\(location, 40\.7359, -73\.9911, 400\)/);
+test('the snapshot query covers both descriptor lists, citywide, 12 months back', () => {
+  const p = snapshotQuery(TODAY);
+  assert.doesNotMatch(p.$where, /within_circle/);
   assert.match(p.$where, /created_date > '2025-11-06'/);
   for (const d of [...PUDDLE_DESCRIPTORS, ...DEFECT_DESCRIPTORS]) assert.ok(p.$where.includes(`'${d}'`), d);
   assert.equal(PUDDLE_DESCRIPTORS.length, 7);
   assert.equal(DEFECT_DESCRIPTORS.length, 7);
+});
+
+test('the snapshot keeps defects within 6 months and only their address', () => {
+  const snap = toSnapshot([
+    row('Sidewalk Condition', 'Broken Sidewalk', '2026-03-01'),
+    row('Sidewalk Condition', 'Broken Sidewalk', '2026-09-01'),
+    row('Sewer', 'Street Flooding (SJ)', '2026-09-01'),
+  ], TODAY);
+  assert.equal(snap.complaints.length, 2);
+  assert.deepEqual(snap.complaints.map((c) => c[6]), ['1 UNION SQUARE WEST', '']);
+});
+
+test('the browser keeps only complaints inside the survey circle', () => {
+  const snap = toSnapshot([
+    row('Sidewalk Condition', 'Broken Sidewalk', '2026-10-01'),
+    row('Sidewalk Condition', 'Broken Sidewalk', '2026-10-01', { latitude: '40.7400' }), // ~455 m north
+  ], TODAY);
+  assert.equal(complaintsAround(snap, CENTER, 400, TODAY).defects.length, 1);
+});
+
+test('fetchComplaints reads the static snapshot; a malformed one is unavailable', async () => {
+  const urls = [];
+  const today = new Date();
+  const snap = toSnapshot([row('Sewer', 'Street Flooding (SJ)', today.toISOString().slice(0, 10))], today);
+  const fetchImpl = async (url) => { urls.push(url); return { ok: true, status: 200, json: async () => snap }; };
+  const { puddles } = await fetchComplaints(CENTER, 400, { fetchImpl });
+  assert.deepEqual(urls, [SNAPSHOT_URL]);
+  assert.equal(SNAPSHOT_URL, '/data/complaints.json');
+  assert.equal(puddles.length, 1);
+  const broken = async () => ({ ok: true, status: 200, json: async () => ({ sheds: [] }) });
+  await assert.rejects(fetchComplaints(CENTER, 400, { fetchImpl: broken }), RecordsUnavailableError);
 });
 
 test('New York keeps its 30 m clusters and keeps single low-weight complaints', () => {
