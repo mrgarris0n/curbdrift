@@ -10,12 +10,14 @@ import * as nycComplaints from '../js/sources/complaints.js';
 import * as chicagoComplaints from '../js/sources/complaints-chicago.js';
 
 const PAGE = 50000;
-const TIMEOUT_MS = 120000;
+// A slow citywide query can take Socrata minutes (Chicago 311 on 2026-11-09: over 120 s, 4 times
+// in a row); SODA 3 itself allows 600 s. Attempts × this stays well inside a 45-minute build.
+const TIMEOUT_MS = 300000;
 // Socrata refuses (503/429) in bursts of a minute or more; wait them out before giving up.
-const ATTEMPTS = 5;
+const ATTEMPTS = 4;
 
-const NYC = 'https://data.cityofnewyork.us/resource/';
-const CHICAGO = 'https://data.cityofchicago.org/resource/';
+const NYC = 'https://data.cityofnewyork.us';
+const CHICAGO = 'https://data.cityofchicago.org';
 const sheds = (snapshot) => snapshot.sheds.length;
 const complaints = (snapshot) => snapshot.complaints.length;
 
@@ -31,17 +33,28 @@ export const SOURCES = [
   { id: 'chicago complaints', file: 'complaints-chicago.json', upstream: CHICAGO, dataset: chicagoComplaints.CHICAGO_311_DATASET, query: chicagoComplaints.snapshotQuery, toSnapshot: chicagoComplaints.toSnapshot, count: complaints, min: 10000 },
 ];
 
-async function fetchPage(label, url, headers, fetchImpl, retryDelayMs) {
+/** A source's query ({$select, $where, $order}) as one page of a SODA 3 query request body. */
+export function queryBody({ $select, $where, $order }, pageNumber) {
+  return {
+    query: `SELECT ${$select} WHERE ${$where} ORDER BY ${$order}`,
+    page: { pageNumber, pageSize: PAGE },
+    includeSynthetic: false,
+    includeSystem: false,
+  };
+}
+
+async function fetchPage(label, url, init, fetchImpl, retryDelayMs) {
   for (let attempt = 1; ; attempt += 1) {
     const started = Date.now();
     try {
-      const res = await fetchImpl(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const rows = await res.json();
-      if (!Array.isArray(rows)) throw new Error('unexpected response shape');
+      const res = await fetchImpl(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
+      const body = await res.text();
+      const rows = JSON.parse(body);
+      if (!Array.isArray(rows)) throw new Error(`unexpected response shape: ${body.slice(0, 200)}`);
       return rows;
     } catch (err) {
-      if (attempt >= ATTEMPTS) throw new Error(`${url} failed: ${err.message}`);
+      if (attempt >= ATTEMPTS) throw new Error(`${label} failed: ${err.message}`);
       // A download can wait out several minutes of refusals; say so, or the build log looks hung.
       console.warn(`build: ${label}: attempt ${attempt}/${ATTEMPTS} failed after ${((Date.now() - started) / 1000).toFixed(1)} s: ${err.message}`);
       await new Promise((r) => setTimeout(r, retryDelayMs * attempt));
@@ -49,13 +62,17 @@ async function fetchPage(label, url, headers, fetchImpl, retryDelayMs) {
   }
 }
 
+// SODA 3 (POST /api/v3/views/<id>/query.json) rather than the SODA 2 GET /resource/<id>.json: on
+// 2026-11-09 the old endpoint answered 429/503 or hung for minutes while the new one responded at
+// once. SODA 3 requires an app token.
 export async function buildSnapshot(source, { token = process.env.SOCRATA_APP_TOKEN ?? '', fetchImpl = globalThis.fetch, now = new Date(), retryDelayMs = 15000, min = source.min } = {}) {
-  const headers = { accept: 'application/json' };
-  if (token) headers['X-App-Token'] = token;
+  if (!token) throw new Error(`${source.id}: SOCRATA_APP_TOKEN is not set (SODA 3 requires an app token)`);
+  const url = `${source.upstream}/api/v3/views/${source.dataset}/query.json`;
+  const headers = { accept: 'application/json', 'content-type': 'application/json', 'X-App-Token': token };
   const rows = [];
-  for (let offset = 0; ; offset += PAGE) {
-    const params = new URLSearchParams({ ...source.query(now), $limit: String(PAGE), $offset: String(offset) });
-    const page = await fetchPage(`${source.id} rows ${offset}+`, `${source.upstream}${source.dataset}.json?${params}`, headers, fetchImpl, retryDelayMs);
+  for (let pageNumber = 1; ; pageNumber += 1) {
+    const init = { method: 'POST', headers, body: JSON.stringify(queryBody(source.query(now), pageNumber)) };
+    const page = await fetchPage(`${source.id} page ${pageNumber}`, url, init, fetchImpl, retryDelayMs);
     rows.push(...page);
     console.log(`build: ${source.id}: ${rows.length} rows so far`);
     if (page.length < PAGE) break;
