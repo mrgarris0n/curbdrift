@@ -29,7 +29,7 @@ It is a deliberately over-engineered answer to a question nobody asked. The numb
 
 ## Data sources
 
-All are free and public. NYC Open Data and the Chicago Data Portal are reached through this app's own proxy (the shed permits and the flood map are snapshots instead); the weather is fetched directly.
+All are free and public. NYC Open Data and the Chicago Data Portal are read at build time into snapshots (as is the flood map, by hand); the weather is fetched directly.
 
 | Data | Source |
 | --- | --- |
@@ -44,7 +44,7 @@ All are free and public. NYC Open Data and the Chicago Data Portal are reached t
 
 ## How it works
 
-A static site (plain HTML, CSS and ES modules, no framework) plus two small serverless functions and a daily cron. The build copies the files and adds a citywide shed snapshot.
+A static site (plain HTML, CSS and ES modules, no framework) plus two small serverless functions and a daily cron. The build copies the files and adds citywide snapshots of shed permits and 311 complaints.
 
 ```
 index.html, css/        page and the two themes (scoped by [data-theme])
@@ -55,16 +55,15 @@ js/scoring.js           all scoring formulas (facts in, numbers and keys out)
 js/route.js             the itinerary planner
 js/themes/*.js          every user-visible word, one module per theme
 js/map.js, js/ui.js     Leaflet map and DOM rendering
-api/socrata.js          proxy to each city's open-data portal that adds the app token server-side
 api/route.js            proxy to openrouteservice that adds the routing key server-side
-api/refresh-sheds.js    daily cron target: redeploys so the shed snapshot is rebuilt
-scripts/build.mjs       deploy build: copies the site, writes data/sheds.json and data/sheds-chicago.json
+api/refresh-sheds.js    daily cron target: redeploys so the snapshots are rebuilt
+scripts/build.mjs       deploy build: copies the site, writes the snapshots in data/ (scripts/snapshots.mjs)
 scripts/flood-points.py manual, offline: flood map → assets/flood.json (committed)
 ```
 
-The browser calls `/api/socrata` and `/api/route` rather than the upstream services, so the Socrata app token and the openrouteservice key stay on the server. `/api/route` only routes short walks that stay inside one of the cities. The proxy only accepts each city's 311 dataset and the query fields the app uses, caps the row count, and caches successful answers at the edge for 5 minutes.
+The browser calls `/api/route` rather than openrouteservice, so the routing key stays on the server. It only routes short walks that stay inside one of the cities. The browser never queries the cities' open-data portals; it only reads the snapshots below, so the Socrata app token is used by the build alone.
 
-Shed permits change once a day, so they don't go through the proxy. Each build downloads every shed and scaffold permit (New York: about 185,000 rows into about 13,000 active structures, `data/sheds.json`, about 0.5 MB gzipped; Chicago: about 3,600 permits into about 290 structures, `data/sheds-chicago.json`, 80 KB). The browser reads that file and keeps the structures inside the survey circle. A Vercel cron calls `/api/refresh-sheds` every morning, which triggers a redeploy through a deploy hook. If either download fails, or returns suspiciously few structures, the build fails and the previous deployment, with its snapshot, stays live.
+Each build downloads every shed and scaffold permit (New York: about 185,000 rows into about 13,000 active structures, `data/sheds.json`, about 0.5 MB gzipped; Chicago: about 3,600 permits into about 290 structures, `data/sheds-chicago.json`, 80 KB) and the last 12 months of the 311 complaint types the app uses (`data/complaints.json`, `data/complaints-chicago.json`; Chicago: about 45,000 complaints; defects are kept for 6 months). The browser reads those files and keeps what is inside the survey circle. Complaints used to be a live 311 query per survey, which Socrata took 10 to 80 seconds to answer or refused outright with 503 and 429 errors. A Vercel cron calls `/api/refresh-sheds` every morning, which triggers a redeploy through a deploy hook. If a download fails, or returns suspiciously few items, the build keeps the copy production serves now. If that copy is missing too, the build fails and the previous deployment stays live.
 
 The flood map is different: it is a static model (last published 2024) that DEP distributes only as Esri File Geodatabases, which plain Node can't read. So `scripts/flood-points.py` converts it by hand, not in the build. It samples the Moderate Flood scenario's ponding areas (4 inches to 1 foot, and 1 foot or more) into about 32,000 points at least 30 m apart, and writes them to `assets/flood.json` (about 150 KB gzipped), which is committed. Re-run it when DEP republishes the dataset; the script's header says how. The browser joins those points to the 311 puddle clusters within 30 m. A cluster on the map counts fully, a cluster off it counts at 0.8, and map spots nobody has complained about become puddles of their own, about a block (100 m) apart, once the Saturation Index reaches 15.
 
@@ -77,12 +76,12 @@ Chicago's complaint weights come from the same rain-day method against Midway's 
 Requires Node 22+ (tests use the built-in runner, no dependencies) and the [Vercel CLI](https://vercel.com/docs/cli) for local serving.
 
 ```bash
-npm test                 # unit tests: scoring, planner, data parsing, proxy, themes
-node scripts/build.mjs   # downloads the shed snapshot into data/ (about a minute)
-vercel dev               # local server with the /api proxy
+npm test                 # unit tests: scoring, planner, data parsing, snapshots, proxy, themes
+node scripts/build.mjs   # downloads the snapshots into data/ (a few minutes; set SOCRATA_APP_TOKEN or Socrata throttles you)
+vercel dev               # local server with the /api functions
 ```
 
-A plain static file server will show the page but cannot run `/api/socrata`, so 311 data won't load.
+After a build, a plain static file server shows sheds, puddles and defects; only the walking route needs `/api/route`.
 
 ### Deploying your own
 

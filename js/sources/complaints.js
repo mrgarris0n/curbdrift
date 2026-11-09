@@ -1,10 +1,15 @@
-import { socrataQuery } from './socrata.js';
+import { getRecordsJson, RecordsUnavailableError } from './socrata.js';
 import { distanceM } from '../geo.js';
 import { PUDDLE_WINDOW_MONTHS, DEFECT_WINDOW_MONTHS } from '../config.js';
 import { parseApiDate, isoDay, monthsBefore } from '../dates.js';
 
 // NYC 311 Service Requests.
-const DATASET = 'erm2-nwe9';
+export const DATASET = 'erm2-nwe9';
+// A live 311 query per survey took Socrata 10–80 s, or failed outright with 503/429, so the deploy
+// build turns a year of complaints into one citywide snapshot (scripts/snapshots.mjs), refreshed
+// daily, and the browser keeps the ones in the survey circle. A day's lag is nothing next to the
+// 12-month window.
+export const SNAPSHOT_URL = '/data/complaints.json';
 // Complaints this close together are one puddle; flood-map spots this close to one belong to it.
 export const CLUSTER_M = 30;
 
@@ -39,14 +44,14 @@ const DEFECT_SET = new Set(DEFECT_DESCRIPTORS);
 
 const quote = (s) => `'${s.replace(/'/g, "''")}'`;
 
-/** One query for both kinds over the longer (puddle) window. */
-export function buildComplaintParams(center, radiusM, today) {
-  const since = isoDay(monthsBefore(today, PUDDLE_WINDOW_MONTHS));
+/** The citywide query behind the snapshot (paged by the caller): both kinds over the longer (puddle) window. */
+export function snapshotQuery(now) {
+  const since = isoDay(monthsBefore(now, PUDDLE_WINDOW_MONTHS));
   const descriptors = [...PUDDLE_DESCRIPTORS, ...DEFECT_DESCRIPTORS].map(quote).join(',');
   return {
     $select: 'unique_key,complaint_type,descriptor,created_date,status,incident_address,latitude,longitude',
-    $where: `within_circle(location, ${center.lat}, ${center.lon}, ${radiusM}) AND created_date > '${since}' AND complaint_type in('Sewer','Sewer Maintenance','Sidewalk Condition') AND descriptor in(${descriptors})`,
-    $limit: '2000',
+    $where: `created_date > '${since}' AND complaint_type in('Sewer','Sewer Maintenance','Sidewalk Condition') AND descriptor in(${descriptors})`,
+    $order: ':id',
   };
 }
 
@@ -99,13 +104,55 @@ function normalize(r) {
   };
 }
 
-/** @returns {{puddles: PuddleFacts[], defects: DefectFacts[]}} */
-export function splitComplaints(rows, today) {
-  return sortComplaints(rows.map(normalize).filter(Boolean), today);
+const round5 = (x) => Math.round(x * 1e5) / 1e5; // about 1 m
+
+/**
+ * Complaints in the shared shape → the JSON snapshot the browser reads, kept compact because it
+ * holds a whole city's year: {generatedAt, types: [[kind, descriptor]], complaints: [[id,
+ * typeIndex, lat, lon, 'YYYY-MM-DD', closed 0|1, address]]}. Only defects keep their address (the
+ * puddle sheet never shows one), and each kind only within its window.
+ */
+export function complaintSnapshotOf(complaints, now) {
+  const since = { P: monthsBefore(now, PUDDLE_WINDOW_MONTHS), D: monthsBefore(now, DEFECT_WINDOW_MONTHS) };
+  const types = [];
+  const typeIndex = new Map();
+  const rows = [];
+  for (const c of complaints) {
+    if (c.created < since[c.kind]) continue;
+    const type = `${c.kind}|${c.descriptor}`;
+    if (!typeIndex.has(type)) {
+      typeIndex.set(type, types.length);
+      types.push([c.kind, c.descriptor]);
+    }
+    rows.push([c.id, typeIndex.get(type), round5(c.lat), round5(c.lon), isoDay(c.created), c.closed ? 1 : 0, c.kind === 'D' ? c.address : '']);
+  }
+  return { generatedAt: now.toISOString(), types, complaints: rows };
 }
 
-export async function fetchComplaints(center, radiusM, opts) {
-  const today = new Date();
-  const rows = await socrataQuery(DATASET, buildComplaintParams(center, radiusM, today), { ...opts, city: 'nyc' });
-  return splitComplaints(rows, today);
+/** Snapshot → the complaints inside the survey circle, in the shared shape. */
+export function complaintsFromSnapshot(snapshot, center, radiusM) {
+  if (!Array.isArray(snapshot?.types) || !Array.isArray(snapshot?.complaints)) throw new RecordsUnavailableError('unexpected snapshot shape');
+  const found = [];
+  for (const [id, typeIndex, lat, lon, day, closed, address] of snapshot.complaints) {
+    const type = snapshot.types[typeIndex];
+    const created = parseApiDate(day);
+    if (!type || !created || distanceM(center, { lat, lon }) > radiusM) continue;
+    found.push({ id, kind: type[0], descriptor: type[1], lat, lon, created, closed: closed === 1, address });
+  }
+  return found;
+}
+
+/** New York 311 rows → the JSON snapshot the browser reads. */
+export function toSnapshot(rows, now) {
+  return complaintSnapshotOf(rows.map(normalize).filter(Boolean), now);
+}
+
+/** Snapshot → New York's puddles and defects in the survey circle. @returns {{puddles: PuddleFacts[], defects: DefectFacts[]}} */
+export function complaintsAround(snapshot, center, radiusM, today) {
+  return sortComplaints(complaintsFromSnapshot(snapshot, center, radiusM), today);
+}
+
+export async function fetchComplaints(center, radiusM, { fetchImpl, timeoutMs, signal } = {}) {
+  const snapshot = await getRecordsJson(SNAPSHOT_URL, { fetchImpl, timeoutMs, signal });
+  return complaintsAround(snapshot, center, radiusM, new Date());
 }

@@ -7,4 +7,3 @@ export const DEFECT_WINDOW_MONTHS = 6;
 // Permits separated by less than this many days count as one continuous structure.
 export const SHED_GAP_DAYS = 60;
 
-export const CACHE_TTL_MS = 300000;

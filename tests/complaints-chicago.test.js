@@ -1,8 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitComplaints, buildComplaintParams, fetchComplaints, PUDDLE_TYPES, DEFECT_TYPES, CHICAGO_311_DATASET } from '../js/sources/complaints-chicago.js';
+import { toSnapshot, complaintsAround, snapshotQuery, fetchComplaints, SNAPSHOT_URL, PUDDLE_TYPES, DEFECT_TYPES, CHICAGO_311_DATASET } from '../js/sources/complaints-chicago.js';
 
 const TODAY = new Date('2026-11-06T12:00:00Z');
+const CENTER = { lat: 41.9088, lon: -87.6796 };
+// Rows → the build's snapshot → what the browser finds within 5 km of Wicker Park.
+const splitComplaints = (rows, today) => complaintsAround(toSnapshot(rows, today), CENTER, 5000, today);
 let n = 0;
 // A Chicago 311 row as the query returns it.
 function row(type, created, extra = {}) {
@@ -18,15 +21,14 @@ test('the puddle and defect types are the ones Phase 0 measured', () => {
   assert.deepEqual([...DEFECT_TYPES], ['Sidewalk Inspection Request']);
 });
 
-test('query: a circle around the survey, 12 months back, only the app\'s types and fields', () => {
-  const q = buildComplaintParams({ lat: 41.9088, lon: -87.6796 }, 400, TODAY);
-  assert.match(q.$where, /within_circle\(location, 41\.9088, -87\.6796, 400\)/);
+test('snapshot query: citywide, 12 months back, only the app\'s types and fields', () => {
+  const q = snapshotQuery(TODAY);
+  assert.doesNotMatch(q.$where, /within_circle/);
   assert.match(q.$where, /created_date > '2025-11-06'/);
   assert.match(q.$where, /'Water On Street Complaint'/);
   assert.match(q.$where, /'Sidewalk Inspection Request'/);
   assert.doesNotMatch(q.$where, /Water in Basement/);
   assert.equal(q.$select, 'sr_number,sr_type,created_date,status,street_address,latitude,longitude');
-  assert.equal(q.$limit, '2000');
 });
 
 test('puddle complaints within 30 m cluster, counted per type', () => {
@@ -62,12 +64,15 @@ test('windows: puddles 12 months, defects 6 months; other types and bad rows are
   assert.equal(puddles.length + defects.length, 0);
 });
 
-test('fetchComplaints asks the proxy for Chicago\'s 311 dataset', async () => {
+test('fetchComplaints reads Chicago\'s own snapshot', async () => {
   assert.equal(CHICAGO_311_DATASET, 'v6vf-nfxy');
   const urls = [];
-  const fetchImpl = async (url) => { urls.push(url); return { ok: true, status: 200, json: async () => [row('Water On Street Complaint', new Date().toISOString().slice(0, 10))] }; };
-  const { puddles } = await fetchComplaints({ lat: 41.9088, lon: -87.6796 }, 400, { fetchImpl, storage: null });
-  assert.match(urls[0], /^\/api\/socrata\?city=chicago&dataset=v6vf-nfxy&/);
+  const today = new Date();
+  const snap = toSnapshot([row('Water On Street Complaint', today.toISOString().slice(0, 10))], today);
+  const fetchImpl = async (url) => { urls.push(url); return { ok: true, status: 200, json: async () => snap }; };
+  const { puddles } = await fetchComplaints(CENTER, 400, { fetchImpl });
+  assert.deepEqual(urls, ['/data/complaints-chicago.json']);
+  assert.equal(SNAPSHOT_URL, '/data/complaints-chicago.json');
   assert.equal(puddles.length, 1);
 });
 
