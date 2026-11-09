@@ -21,27 +21,30 @@ test('pages through the dataset with the token and builds the snapshot', async (
   assert.equal(rows, 50001);
   assert.equal(snapshot.sheds.length, 50001);
   assert.equal(snapshot.generatedAt, NOW.toISOString());
-  assert.deepEqual(calls.map((c) => c.url.searchParams.get('$offset')), ['0', '50000']);
-  assert.equal(calls[0].url.pathname, '/resource/rbx6-tga4.json');
+  const bodies = calls.map((c) => JSON.parse(c.init.body));
+  assert.deepEqual(bodies.map((b) => b.page), [{ pageNumber: 1, pageSize: 50000 }, { pageNumber: 2, pageSize: 50000 }]);
+  assert.match(bodies[0].query, /^SELECT bin,.* WHERE work_type in\(.*\) ORDER BY :id$/);
+  assert.equal(calls[0].init.method, 'POST');
+  assert.equal(calls[0].url.href, 'https://data.cityofnewyork.us/api/v3/views/rbx6-tga4/query.json');
   assert.equal(calls[0].init.headers['X-App-Token'], 'secret');
 });
 
 test('retries a failed page', async () => {
   let n = 0;
   const fetchImpl = async () => (++n === 1 ? new Response('busy', { status: 503 }) : ok([row('a')]));
-  const { snapshot } = await buildSnapshot(NYC, { fetchImpl, now: NOW, retryDelayMs: 1, min: 1 });
+  const { snapshot } = await buildSnapshot(NYC, { token: 'secret', fetchImpl, now: NOW, retryDelayMs: 1, min: 1 });
   assert.equal(n, 2);
   assert.equal(snapshot.sheds.length, 1);
 });
 
 test('gives up after repeated failures, so the build fails', async () => {
   const fetchImpl = async () => new Response('busy', { status: 503 });
-  await assert.rejects(buildSnapshot(NYC, { fetchImpl, now: NOW, retryDelayMs: 1 }), /HTTP 503/);
+  await assert.rejects(buildSnapshot(NYC, { token: 'secret', fetchImpl, now: NOW, retryDelayMs: 1 }), /HTTP 503/);
 });
 
 test('refuses to publish a suspiciously small snapshot', async () => {
   const fetchImpl = async () => ok([row('a')]);
-  await assert.rejects(buildSnapshot(NYC, { fetchImpl, now: NOW }), /refusing to publish/);
+  await assert.rejects(buildSnapshot(NYC, { token: 'secret', fetchImpl, now: NOW }), /refusing to publish/);
 });
 
 test('Chicago builds from its own portal and dataset, with its own floor', async () => {
@@ -49,10 +52,10 @@ test('Chicago builds from its own portal and dataset, with its own floor', async
   const calls = [];
   const fetchImpl = async (url, init) => { calls.push({ url: new URL(url), init }); return ok([chicagoRow]); };
   const { snapshot } = await buildSnapshot(source('chicago sheds'), { token: 'secret', fetchImpl, now: NOW, min: 1 });
-  assert.equal(calls[0].url.origin + calls[0].url.pathname, 'https://data.cityofchicago.org/resource/ydr8-5enu.json');
+  assert.equal(calls[0].url.href, 'https://data.cityofchicago.org/api/v3/views/ydr8-5enu/query.json');
   assert.equal(calls[0].init.headers['X-App-Token'], 'secret');
   assert.equal(snapshot.sheds[0].address, '1 N STATE ST');
-  await assert.rejects(buildSnapshot(source('chicago sheds'), { fetchImpl, now: NOW }), /chicago.*refusing to publish/);
+  await assert.rejects(buildSnapshot(source('chicago sheds'), { token: 'secret', fetchImpl, now: NOW }), /chicago.*refusing to publish/);
 });
 
 test('every source has its own file', () => {
@@ -61,24 +64,24 @@ test('every source has its own file', () => {
 
 test('New York complaints: a year of the app\'s 311 types, citywide, into the compact snapshot', async () => {
   const calls = [];
-  const fetchImpl = async (url) => {
-    calls.push(new URL(url));
+  const fetchImpl = async (url, init) => {
+    calls.push({ url: new URL(url), query: JSON.parse(init.body).query });
     return ok([{ unique_key: '1', complaint_type: 'Sewer', descriptor: 'Street Flooding (SJ)', created_date: '2026-10-01T10:00:00.000', status: 'Open', incident_address: 'X', latitude: '40.7', longitude: '-73.9' }]);
   };
-  const { snapshot } = await buildSnapshot(source('nyc complaints'), { fetchImpl, now: NOW, min: 1 });
-  assert.equal(calls[0].pathname, '/resource/erm2-nwe9.json');
-  assert.match(calls[0].searchParams.get('$where'), /^created_date > '2025-11-06' AND /);
-  assert.doesNotMatch(calls[0].searchParams.get('$where'), /within_circle/);
+  const { snapshot } = await buildSnapshot(source('nyc complaints'), { token: 'secret', fetchImpl, now: NOW, min: 1 });
+  assert.equal(calls[0].url.pathname, '/api/v3/views/erm2-nwe9/query.json');
+  assert.match(calls[0].query, / WHERE created_date > '2025-11-06' AND /);
+  assert.doesNotMatch(calls[0].query, /within_circle/);
   assert.deepEqual(snapshot.types, [['P', 'Street Flooding (SJ)']]);
   assert.deepEqual(snapshot.complaints, [['1', 0, 40.7, -73.9, '2026-10-01', 0, '']]);
-  await assert.rejects(buildSnapshot(source('nyc complaints'), { fetchImpl, now: NOW }), /nyc complaints.*refusing to publish/);
+  await assert.rejects(buildSnapshot(source('nyc complaints'), { token: 'secret', fetchImpl, now: NOW }), /nyc complaints.*refusing to publish/);
 });
 
 test('Chicago complaints come from Chicago\'s 311 dataset', async () => {
   const calls = [];
   const fetchImpl = async (url) => { calls.push(new URL(url)); return ok([]); };
-  await buildSnapshot(source('chicago complaints'), { fetchImpl, now: NOW, min: 0 });
-  assert.equal(calls[0].origin + calls[0].pathname, 'https://data.cityofchicago.org/resource/v6vf-nfxy.json');
+  await buildSnapshot(source('chicago complaints'), { token: 'secret', fetchImpl, now: NOW, min: 0 });
+  assert.equal(calls[0].href, 'https://data.cityofchicago.org/api/v3/views/v6vf-nfxy/query.json');
 });
 
 test('a snapshot that cannot be built falls back to production\'s copy', async () => {
@@ -91,7 +94,7 @@ test('a snapshot that cannot be built falls back to production\'s copy', async (
   const warn = console.warn;
   console.warn = () => {};
   try {
-    const got = await snapshotOrLiveCopy(source('nyc complaints'), { host: 'curbdrift.example', fetchImpl, now: NOW, retryDelayMs: 1 });
+    const got = await snapshotOrLiveCopy(source('nyc complaints'), { token: 'secret', host: 'curbdrift.example', fetchImpl, now: NOW, retryDelayMs: 1 });
     assert.deepEqual(got, { snapshot: live, rows: null });
     assert.equal(urls.at(-1), 'https://curbdrift.example/data/complaints.json');
   } finally {
@@ -104,8 +107,8 @@ test('with no production copy either, the build fails', async () => {
   const warn = console.warn;
   console.warn = () => {};
   try {
-    await assert.rejects(snapshotOrLiveCopy(NYC, { host: 'curbdrift.example', fetchImpl, now: NOW, retryDelayMs: 1 }), /HTTP 503.*production's copy unavailable too/);
-    await assert.rejects(snapshotOrLiveCopy(NYC, { host: undefined, fetchImpl, now: NOW, retryDelayMs: 1 }), /HTTP 503/);
+    await assert.rejects(snapshotOrLiveCopy(NYC, { token: 'secret', host: 'curbdrift.example', fetchImpl, now: NOW, retryDelayMs: 1 }), /HTTP 503.*production's copy unavailable too/);
+    await assert.rejects(snapshotOrLiveCopy(NYC, { token: 'secret', host: undefined, fetchImpl, now: NOW, retryDelayMs: 1 }), /HTTP 503/);
   } finally {
     console.warn = warn;
   }
@@ -114,7 +117,19 @@ test('with no production copy either, the build fails', async () => {
 test('a building snapshot that succeeds never touches production', async () => {
   const urls = [];
   const fetchImpl = async (url) => { urls.push(String(url)); return ok([row('a')]); };
-  const { rows } = await snapshotOrLiveCopy(NYC, { host: 'curbdrift.example', fetchImpl, now: NOW, min: 1 });
+  const { rows } = await snapshotOrLiveCopy(NYC, { token: 'secret', host: 'curbdrift.example', fetchImpl, now: NOW, min: 1 });
   assert.equal(rows, 1);
   assert.ok(urls.every((u) => !u.includes('curbdrift.example')));
+});
+
+test('without an app token the build stops before asking (SODA 3 requires one)', async () => {
+  let called = false;
+  const fetchImpl = async () => { called = true; return ok([]); };
+  await assert.rejects(buildSnapshot(NYC, { token: '', fetchImpl, now: NOW, min: 0 }), /SOCRATA_APP_TOKEN is not set/);
+  assert.equal(called, false);
+});
+
+test('a response that is not a row array is reported with what came back', async () => {
+  const fetchImpl = async () => ok({ rows: [] });
+  await assert.rejects(buildSnapshot(NYC, { token: 'secret', fetchImpl, now: NOW, retryDelayMs: 1, min: 0 }), /unexpected response shape: \{"rows":\[\]\}/);
 });

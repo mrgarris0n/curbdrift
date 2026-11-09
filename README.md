@@ -77,7 +77,7 @@ Requires Node 22+ (tests use the built-in runner, no dependencies) and the [Verc
 
 ```bash
 npm test                 # unit tests: scoring, planner, data parsing, snapshots, proxy, themes
-node scripts/build.mjs   # downloads the snapshots into data/ (a few minutes; set SOCRATA_APP_TOKEN or Socrata throttles you)
+node scripts/build.mjs   # downloads the snapshots into data/ (a few minutes; needs SOCRATA_APP_TOKEN: SODA 3 requires one)
 vercel dev               # local server with the /api functions
 ```
 
