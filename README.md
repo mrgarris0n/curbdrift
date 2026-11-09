@@ -63,7 +63,7 @@ scripts/flood-points.py manual, offline: flood map → assets/flood.json (commit
 
 The browser calls `/api/route` rather than openrouteservice, so the routing key stays on the server. It only routes short walks that stay inside one of the cities. The browser never queries the cities' open-data portals; it only reads the snapshots below, so the Socrata app token is used by the build alone.
 
-Each build downloads every shed and scaffold permit (New York: about 185,000 rows into about 13,000 active structures, `data/sheds.json`, about 0.5 MB gzipped; Chicago: about 3,600 permits into about 290 structures, `data/sheds-chicago.json`, 80 KB) and the last 12 months of the 311 complaint types the app uses (`data/complaints.json`, `data/complaints-chicago.json`; Chicago: about 45,000 complaints; defects are kept for 6 months). The browser reads those files and keeps what is inside the survey circle. Complaints used to be a live 311 query per survey, which Socrata took 10 to 80 seconds to answer or refused outright with 503 and 429 errors. A Vercel cron calls `/api/refresh-sheds` every morning, which triggers a redeploy through a deploy hook. If a download fails, or returns suspiciously few items, the build keeps the copy production serves now. If that copy is missing too, the build fails and the previous deployment stays live.
+Each build downloads every shed and scaffold permit (New York: about 185,000 rows into about 13,000 active structures, `data/sheds.json`, about 0.5 MB gzipped; Chicago: about 3,600 permits into about 290 structures, `data/sheds-chicago.json`, 80 KB) and the last 12 months of the 311 complaint types the app uses (New York: about 30,000 rows into about 24,000 complaints, `data/complaints.json`, about 330 KB gzipped; Chicago: about 45,000 rows into about 42,000 complaints, `data/complaints-chicago.json`, about 520 KB gzipped; defects are kept for 6 months). The downloads use Socrata's SODA 3 query endpoint (`POST /api/v3/views/<id>/query.json`): on the day this was built, the older SODA 2 endpoint (`/resource/<id>.json`) answered with 429, 500 and 503 errors or hung for minutes, while SODA 3 got through. The browser reads those files and keeps what is inside the survey circle. Complaints used to be a live 311 query per survey, which Socrata took 10 to 80 seconds to answer or refused outright with 503 and 429 errors. A Vercel cron calls `/api/refresh-sheds` every morning, which triggers a redeploy through a deploy hook. If a download fails, or returns suspiciously few items, the build keeps the copy production serves now. If that copy is missing too, the build fails and the previous deployment stays live.
 
 The flood map is different: it is a static model (last published 2024) that DEP distributes only as Esri File Geodatabases, which plain Node can't read. So `scripts/flood-points.py` converts it by hand, not in the build. It samples the Moderate Flood scenario's ponding areas (4 inches to 1 foot, and 1 foot or more) into about 32,000 points at least 30 m apart, and writes them to `assets/flood.json` (about 150 KB gzipped), which is committed. Re-run it when DEP republishes the dataset; the script's header says how. The browser joins those points to the 311 puddle clusters within 30 m. A cluster on the map counts fully, a cluster off it counts at 0.8, and map spots nobody has complained about become puddles of their own, about a block (100 m) apart, once the Saturation Index reaches 15.
 
@@ -87,20 +87,21 @@ After a build, a plain static file server shows sheds, puddles and defects; only
 
 1. Get a free Socrata app token from NYC Open Data (developer settings in your profile).
 2. Get a free [openrouteservice](https://openrouteservice.org/) API key.
-3. Set both as environment variables for your Vercel project:
+3. Set both as environment variables for your Vercel project. The build needs the Socrata token in every environment it builds, previews included, because it downloads through SODA 3, which requires one:
    ```bash
    vercel env add SOCRATA_APP_TOKEN --environment production
+   vercel env add SOCRATA_APP_TOKEN --environment preview
    vercel env add ORS_API_KEY --environment production
    ```
 4. Deploy with `vercel deploy --prod`. `vercel.json` copies the site into `dist/`, and `api/` is deployed as a function.
-5. For the daily shed refresh, create a deploy hook for the production branch (Project Settings → Git → Deploy Hooks), then add its URL and a random cron secret:
+5. For the daily snapshot refresh, create a deploy hook for the production branch (Project Settings → Git → Deploy Hooks), then add its URL and a random cron secret:
    ```bash
    vercel env add DEPLOY_HOOK_URL --environment production
    vercel env add CRON_SECRET --environment production
    ```
-   Without them the snapshot only updates when you deploy.
+   Without them the snapshots only update when you deploy.
 
-The app works without either: without the Socrata token anonymous requests are rate-limited heavily, and without the routing key itineraries use the straight-line estimate.
+Without the Socrata token the build stops, since it can't download the snapshots. Without the routing key the app still works, and itineraries use the straight-line estimate.
 
 ## Limitations
 
