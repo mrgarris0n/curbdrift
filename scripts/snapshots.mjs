@@ -10,9 +10,11 @@ import * as nycComplaints from '../js/sources/complaints.js';
 import * as chicagoComplaints from '../js/sources/complaints-chicago.js';
 
 const PAGE = 50000;
-const TIMEOUT_MS = 120000;
+// A slow citywide query can take Socrata minutes (Chicago 311 on 2026-11-09: over 120 s, 4 times
+// in a row); SODA 3 itself allows 600 s. Attempts × this stays well inside a 45-minute build.
+const TIMEOUT_MS = 300000;
 // Socrata refuses (503/429) in bursts of a minute or more; wait them out before giving up.
-const ATTEMPTS = 5;
+const ATTEMPTS = 4;
 
 const NYC = 'https://data.cityofnewyork.us';
 const CHICAGO = 'https://data.cityofchicago.org';
